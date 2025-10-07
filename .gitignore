@@ -1,0 +1,9 @@
+# Ignore Node modules
+node_modules
+
+# Ignore sensitive environment file
+BACKEND/.env
+
+# Ignore specific development/OS files
+.DS_Store
+*.log
