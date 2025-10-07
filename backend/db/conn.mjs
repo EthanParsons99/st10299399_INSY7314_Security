@@ -3,12 +3,12 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-
 const connectionString = process.env.ATLAS_URI || ""; 
 console.log(connectionString);
 
 const client = new MongoClient(connectionString);
 
+let conn; // <-- ADD THIS LINE TO DECLARE THE CONNECTION VARIABLE
 let db;
 
 try {
