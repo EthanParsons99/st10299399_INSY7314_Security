@@ -1,15 +1,30 @@
-import express, { request, response, Router } from "express";
+// backend/routes/user.mjs
+
+import express from "express";
 import db from "../db/conn.mjs";
 import { ObjectId } from "mongodb";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import ExpressBrute from "express-brute";
+import rateLimit from 'express-rate-limit'; // <-- 1. IMPORT THE NEW PACKAGE
 
 const router = express.Router();
 
-var store = new ExpressBrute.MemoryStore();
-var bruteForce = new ExpressBrute(store);
+// 2. REMOVE THE OLD ExpressBrute CODE
+// var store = new ExpressBrute.MemoryStore();
+// var bruteForce = new ExpressBrute(store);
 
+// 3. ADD THE NEW RATE LIMITER CONFIGURATION
+// This will limit login attempts to 10 requests per 15 minutes for each IP address
+const loginLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 10, // Limit each IP to 10 requests per `window` (here, per 15 minutes)
+	standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+	legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  message: 'Too many login attempts from this IP, please try again after 15 minutes',
+});
+
+
+// This route does not need rate limiting
 router.post("/signup", async (req, res) => {
   try {
     const { name, password } = req.body;
@@ -36,7 +51,9 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-router.post("/login", bruteForce.prevent, async (req, res) => {
+
+// 4. APPLY THE NEW LIMITER TO THE LOGIN ROUTE
+router.post("/login", loginLimiter, async (req, res) => {
   const { name, password } = req.body;
   console.log(name + " " + password);
 

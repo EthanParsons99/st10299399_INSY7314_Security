@@ -1,9 +1,20 @@
-# Ignore Node modules
-node_modules
+# Dependencies
+/node_modules
+/backend/node_modules
+/frontend/node_modules
 
-# Ignore sensitive environment file
-BACKEND/.env
+# Environment variables
+.env
+backend/.env
+frontend/.env
 
-# Ignore specific development/OS files
+# Production build folder (from frontend)
+/frontend/build
+
+# Log files
+*.log
+npm-debug.log*
+
+# System files
 .DS_Store
 *.log
