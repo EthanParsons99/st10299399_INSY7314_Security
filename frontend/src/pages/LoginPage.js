@@ -4,12 +4,18 @@ import { Link } from 'react-router-dom';
 
 function LoginPage() {
   return (
-    <div className="page-container">
-      <h2>Customer Portal Login</h2>
-      <LoginForm />
-      <p>
-        Don't have an account? <Link to="/signup">Sign Up</Link>
-      </p>
+    <div className="auth-layout">
+      <div className="auth-branding">
+        <h1>IPS</h1>
+        <p>International Payment System</p>
+      </div>
+      <div className="auth-form-container">
+        <h2>Customer Portal Login</h2>
+        <LoginForm />
+        <p className="account-link">
+          Don't have an account? <Link to="/signup">Sign Up</Link>
+        </p>
+      </div>
     </div>
   );
 }

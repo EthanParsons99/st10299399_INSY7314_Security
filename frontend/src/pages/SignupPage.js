@@ -4,12 +4,18 @@ import { Link } from 'react-router-dom';
 
 function SignupPage() {
   return (
-    <div className="page-container">
-      <h2>Create New Account</h2>
-      <SignupForm />
-      <p>
-        Already have an account? <Link to="/login">Log In</Link>
-      </p>
+    <div className="auth-layout">
+      <div className="auth-branding">
+        <h1>IPS</h1>
+        <p>International Payment System</p>
+      </div>
+      <div className="auth-form-container">
+        <h2>Create New Account</h2>
+        <SignupForm />
+        <p className="account-link">
+          Already have an account? <Link to="/login">Log In</Link>
+        </p>
+      </div>
     </div>
   );
 }
