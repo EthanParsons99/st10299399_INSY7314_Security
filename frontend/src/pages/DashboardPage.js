@@ -18,7 +18,7 @@ function DashboardPage() {
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">
-        {/* --- UPDATED SECTION START --- */}
+        {}
         <div className="header-branding">
           <h2 className="app-name">IPS</h2>
           <span className="app-subtitle">International Payment System</span>
@@ -27,7 +27,7 @@ function DashboardPage() {
           <span className="welcome-message">Welcome, {userName || 'Customer'}!</span>
           <button onClick={handleLogout} className="button-logout">Logout</button>
         </div>
-        {/* --- UPDATED SECTION END --- */}
+        {}
       </header>
       <div className="dashboard-content">
         <PaymentForm />
