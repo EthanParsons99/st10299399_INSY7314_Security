@@ -29,7 +29,7 @@ The project requires you to run dual server setup
 - Step 5: In the terminal enter: cd backend then "npm install --legacy-peer-deps"
 - Step 6: After the install is finished open another terminal and enter: cd frontend then "npm install"
 - Step 7: After the install is complete go back to the terminal which is in the backend and "npm run dev" to start the backend (It should say mongoDB is CONNECTED and Server is running on port:3000)
-- Step 8: Go back to the other terminal that is in the frontend and run "npm start" when the terminal promts if it should open a new port enter Y
+- Step 8: Go back to the other terminal that is in the frontend and run "npm start" when the terminal prompts if it should open a new port enter Y
 - Step 9: It should launch a tab in your browser. Before trying to login open a new tab and navigate to https://localhost:3000
 - Step 10: When the browser displays the "Your connection is not private" warning, click "Advanced" or "Proceed to localhost" to accept the certificate
 - Step 11: Once accepted switch back to the frontend (e.g., https://localhost:3001/login). The API calls will now succeed and you will be able to test the system.
