@@ -35,34 +35,31 @@ function LoginForm() {
     setIsLoading(true);
 
     try {
-      // PROTECTION 3: Use HTTPS in production, HTTP for development
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+      // Uses HTTPS
+      const apiUrl = process.env.REACT_APP_API_URL || 'https://localhost:3000';
       const response = await fetch(`${apiUrl}/user/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // PROTECTION 4: Include security headers
           'X-Requested-With': 'XMLHttpRequest'
         },
-        credentials: 'include', // Include cookies for CSRF protection
+        credentials: 'include', 
         body: JSON.stringify({ name, password }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // PROTECTION 5: Securely store token in sessionStorage (cleared on browser close)
-        // or use HttpOnly cookies if backend supports it
+        // stores token in sessionStorage
         sessionStorage.setItem('token', data.token);
         sessionStorage.setItem('userName', data.name);
         
-        // Clear sensitive data
+        // Clears sensitive data
         setPassword('');
         setName('');
         
         navigate('/dashboard');
       } else {
-        // Generic error message (doesn't leak info)
         setMessage('Invalid credentials. Please try again.');
       }
     } catch (error) {

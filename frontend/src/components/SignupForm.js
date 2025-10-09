@@ -22,7 +22,7 @@ function SignupForm() {
 
       if (response.status === 201) {
         setMessage('Signup successful! Please log in.');
-        setTimeout(() => navigate('/login'), 2000); // Redirect to login after 2 seconds
+        setTimeout(() => navigate('/login'), 2000);
       } else {
         setMessage(data.Message || 'Signup failed. Please try another username.');
       }

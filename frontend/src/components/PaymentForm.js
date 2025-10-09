@@ -8,7 +8,7 @@ function PaymentForm() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // PROTECTION 1: Input validation on change (prevents XSS)
+  // Input validation
   const handleAmountChange = (e) => {
     const value = e.target.value;
     if (/^\d*\.?\d{0,2}$/.test(value)) {
@@ -42,7 +42,7 @@ function PaymentForm() {
       return;
     }
 
-    // PROTECTION 2: Validate all fields before sending
+    //Validates all fields before sending
     if (!amount || !recipientAccount || !swiftCode) {
       setMessage('All fields are required.');
       setIsLoading(false);
@@ -52,17 +52,18 @@ function PaymentForm() {
     const paymentData = {
       amount: parseFloat(amount),
       currency,
+      provider: 'SWIFT',
       recipientAccount,
       swiftCode,
     };
 
     try {
-      const response = await fetch('http://localhost:3000/post', {
+      const response = await fetch('https://localhost:3000/post', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
-          'X-Requested-With': 'XMLHttpRequest' // PROTECTION 3: CSRF prevention
+          'X-Requested-With': 'XMLHttpRequest'
         },
         credentials: 'include',
         body: JSON.stringify(paymentData),
@@ -75,7 +76,6 @@ function PaymentForm() {
         setAmount('');
         setRecipientAccount('');
         setSwiftCode('');
-        // Trigger refresh after short delay
         setTimeout(() => window.location.reload(), 2000);
       } else {
         setMessage(`Error: ${data.message || 'Payment failed'}`);

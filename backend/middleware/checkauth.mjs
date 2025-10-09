@@ -2,7 +2,7 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 
-// Session store to track active sessions (in production, use Redis)
+// Session store to track active sessions 
 export const activeSessions = new Map();
 
 export default (req, res, next) => {

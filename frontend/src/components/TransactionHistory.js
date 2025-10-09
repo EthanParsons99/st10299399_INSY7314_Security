@@ -15,7 +15,7 @@ function TransactionHistory() {
       }
 
       try {
-        const response = await fetch('http://localhost:3000/post', {
+        const response = await fetch('https://localhost:3000/post', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -26,7 +26,6 @@ function TransactionHistory() {
 
         if (response.ok) {
           const data = await response.json();
-          // PROTECTION: Sanitize displayed data to prevent XSS
           setPayments(data.map(p => ({
             ...p,
             recipientAccount: p.recipientAccount.replace(/</g, '&lt;').replace(/>/g, '&gt;'),

@@ -7,12 +7,11 @@ const ProtectedRoute = ({ children }) => {
 
   if (!token) {
     console.log('No token found, redirecting to login');
-    // Clear any stale data
     sessionStorage.clear();
     return <Navigate to="/login" replace />;
   }
 
-  // Check if token is about to expire (optional: check jwt exp claim)
+  // Checks if token is about to expire
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     const expiresIn = (payload.exp * 1000) - Date.now();
@@ -23,7 +22,7 @@ const ProtectedRoute = ({ children }) => {
       return <Navigate to="/login" replace />;
     }
     
-    if (expiresIn < 60000) { // Less than 1 minute
+    if (expiresIn < 60000) { 
       console.warn('Token expiring soon:', Math.round(expiresIn / 1000), 'seconds');
     }
   } catch (err) {

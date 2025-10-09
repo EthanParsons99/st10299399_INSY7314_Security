@@ -8,7 +8,7 @@ console.log(connectionString);
 
 const client = new MongoClient(connectionString);
 
-let conn; // <-- ADD THIS LINE TO DECLARE THE CONNECTION VARIABLE
+let conn;
 let db;
 
 try {
