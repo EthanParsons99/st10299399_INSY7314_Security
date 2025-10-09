@@ -37,3 +37,8 @@ The project requires you to run dual server setup
   ## Login Information
   - Username: testuser
   - Password: SecurePassword123
+
+ ## Database Setup
+ - **User** -> name, password
+ - **Payment** -> amount, currency, provider, recipientAmount, swiftCode, status, owner, createdAt
+
