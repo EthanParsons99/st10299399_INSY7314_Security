@@ -25,7 +25,7 @@ The project requires you to run dual server setup
 - Step 1: Download the zip and extect to a location of your choice
 - Step 2: Ensure the .env file is in the the backend folder
 - Step 3: If step 2 is missing. Then run visual studio code as an administrator and create the .env file and paste the MongoDB Atlas connection string in the .env file
-- Step 4: Install the dependancies by opening a terminal in visual studio code
+- Step 4: Install the dependencies by opening a terminal in visual studio code
 - Step 5: In the terminal enter: cd backend then "npm install --legacy-peer-deps"
 - Step 6: After the install is finished open another terminal and enter: cd frontend then "npm install"
 - Step 7: After the install is complete go back to the terminal which is in the backend and "npm run dev" to start the backend (It should say mongoDB is CONNECTED and Server is running on port:3000)
