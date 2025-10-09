@@ -5,7 +5,7 @@
 - **Joshua Thomas** - ST10263292
 - **Morne Erasmus** - ST10400684
 
-The project implements a secure backend API for a customer international payments portal. The core focus is on the requiremnets that are needed for task 2.
+The project implements a secure backend API for a customer international payments portal. The core focus is on the requirements that are needed for task 2.
 These include:
 - Password security with hashing and salting
 - Ensuring all inputs are whitelisted using RegEx patterns 
