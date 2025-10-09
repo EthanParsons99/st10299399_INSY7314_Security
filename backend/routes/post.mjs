@@ -1,31 +1,59 @@
-// backend/routes/post.mjs
 import express from "express";
 import db from "../db/conn.mjs";
-import { ObjectId } from "mongodb";
-import checkauth from "../middleware/checkauth.mjs"; // <-- Import the middleware
+import checkauth from "../middleware/checkauth.mjs";
+import { validateInput, sanitizeInput, validationRules } from "../middleware/inputValidation.mjs";
+import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
 
-// CREATE a new payment. This route is now PROTECTED by the checkauth middleware.
-router.post("/", checkauth, async (req, res) => {
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: 'Too many payment requests. Please slow down.',
+});
+
+router.post("/", checkauth, paymentLimiter, async (req, res) => {
   try {
-    // The checkauth middleware ran first. If it passed, we have req.userData.
-    const paymentData = req.body;
-    const collection = db.collection("payments"); // Let's use a "payments" collection
+    const { amount, currency, recipientAccount, swiftCode } = req.body;
+
+    if (!validateInput(amount.toString(), validationRules.amount)) {
+      return res.status(400).json({ message: "Invalid amount" });
+    }
+
+    if (!validateInput(currency, validationRules.currency)) {
+      return res.status(400).json({ message: "Invalid currency" });
+    }
+
+    if (!validateInput(recipientAccount, validationRules.accountNumber)) {
+      return res.status(400).json({ message: "Invalid account number" });
+    }
+
+    if (!validateInput(swiftCode, validationRules.swiftCode)) {
+      return res.status(400).json({ message: "Invalid SWIFT code" });
+    }
+
+    const sanitizedAccount = sanitizeInput(recipientAccount);
+    const sanitizedSwift = sanitizeInput(swiftCode);
+
+    const collection = db.collection("payments");
 
     const newPayment = {
-      amount: paymentData.amount,
-      currency: paymentData.currency,
-      provider: paymentData.provider,
-      recipientAccount: paymentData.recipientAccount,
-      swiftCode: paymentData.swiftCode,
-      status: "pending", // Default status for a new payment
-      owner: req.userData.name, // Link the payment to the logged-in user
+      amount: parseFloat(amount),
+      currency: currency.toUpperCase(),
+      provider: 'SWIFT',
+      recipientAccount: sanitizedAccount,
+      swiftCode: sanitizedSwift,
+      status: "pending",
+      owner: req.userData.name,
       createdAt: new Date(),
     };
 
     const result = await collection.insertOne(newPayment);
-    res.status(201).json({ message: "Payment created successfully", paymentId: result.insertedId });
+
+    res.status(201).json({ 
+      message: "Payment created successfully", 
+      paymentId: result.insertedId 
+    });
 
   } catch (error) {
     console.error("Payment creation error:", error);
@@ -33,18 +61,19 @@ router.post("/", checkauth, async (req, res) => {
   }
 });
 
-// GET all payments for the logged-in user. Also protected.
 router.get("/", checkauth, async (req, res) => {
-    try {
-        const collection = db.collection("payments");
-        // Find only payments that belong to the logged-in user
-        const payments = await collection.find({ owner: req.userData.name }).toArray();
-        res.status(200).json(payments);
-    } catch (error) {
-        console.error("Fetch payments error:", error);
-        res.status(500).json({ message: "Failed to fetch payments." });
-    }
-});
+  try {
+    const collection = db.collection("payments");
+    const payments = await collection
+      .find({ owner: req.userData.name })
+      .toArray();
 
+    res.status(200).json(payments);
+
+  } catch (error) {
+    console.error("Fetch payments error:", error);
+    res.status(500).json({ message: "Failed to fetch payments." });
+  }
+});
 
 export default router;

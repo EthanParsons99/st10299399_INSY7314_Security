@@ -3,12 +3,14 @@ import React, { useState, useEffect } from 'react';
 function TransactionHistory() {
   const [payments, setPayments] = useState([]);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchPayments = async () => {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       if (!token) {
         setError('You are not logged in.');
+        setIsLoading(false);
         return;
       }
 
@@ -17,23 +19,34 @@ function TransactionHistory() {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
+            'X-Requested-With': 'XMLHttpRequest'
           },
+          credentials: 'include'
         });
 
         if (response.ok) {
           const data = await response.json();
-          setPayments(data);
+          // PROTECTION: Sanitize displayed data to prevent XSS
+          setPayments(data.map(p => ({
+            ...p,
+            recipientAccount: p.recipientAccount.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+            swiftCode: p.swiftCode.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          })));
         } else {
           const errData = await response.json();
-          setError(errData.message || 'Failed to fetch transaction history.');
+          setError(errData.message || 'Failed to fetch transactions.');
         }
       } catch (err) {
         setError('Network error. Could not fetch transactions.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchPayments();
-  }, []); // The empty array [] means this effect runs once when the component mounts
+  }, []);
+
+  if (isLoading) return <div className="component-container"><p>Loading...</p></div>;
 
   return (
     <div className="component-container">

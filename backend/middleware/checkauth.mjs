@@ -1,24 +1,54 @@
-// backend/middleware/checkauth.mjs
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
+
+// Session store to track active sessions (in production, use Redis)
+const activeSessions = new Map();
 
 export default (req, res, next) => {
   try {
-    // Tokens are usually sent in the header like "Bearer TOKEN_VALUE"
-    // We split the string and take the second part, which is the token itself.
-    const token = req.headers.authorization.split(" ")[1];
+    const token = req.headers.authorization?.split(" ")[1];
 
-    // Verify the token using the same secret you used to create it
-    const decodedToken = jwt.verify(token, "this_secret_should_be_longer_than_it_is");
+    if (!token) {
+      return res.status(401).json({ message: "Authentication failed: Token missing." });
+    }
 
-    // Attach the decoded user info to the request object
-    // Now, any subsequent route handler can access `req.userData`
-    req.userData = { name: decodedToken.name };
-    
-    // If verification is successful, allow the request to proceed
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET || "your_long_secret_key_change_this");
+
+    const sessionId = decodedToken.sessionId;
+    if (!activeSessions.has(sessionId) || activeSessions.get(sessionId).token !== token) {
+      return res.status(401).json({ message: "Session invalid or expired." });
+    }
+
+    const storedIp = activeSessions.get(sessionId).ip;
+    const currentIp = req.ip || req.connection.remoteAddress;
+    if (storedIp !== currentIp) {
+      activeSessions.delete(sessionId);
+      return res.status(401).json({ message: "Session hijacking detected. Please log in again." });
+    }
+
+    if (decodedToken.exp && Date.now() >= decodedToken.exp * 1000) {
+      activeSessions.delete(sessionId);
+      return res.status(401).json({ message: "Token expired." });
+    }
+
+    req.userData = { 
+      name: decodedToken.name,
+      sessionId: sessionId
+    };
+
     next();
 
   } catch (error) {
-    // If the token is missing or invalid, deny access
     return res.status(401).json({ message: "Authentication failed: Invalid token." });
   }
 };
+
+export function createSession(token, ip, userName) {
+  const sessionId = crypto.randomUUID();
+  activeSessions.set(sessionId, { token, ip, userName, createdAt: Date.now() });
+  return sessionId;
+}
+
+export function destroySession(sessionId) {
+  activeSessions.delete(sessionId);
+}
