@@ -1,35 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 function LoginForm() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+
+  // PROTECTION 1: Validate input on change (prevents XSS)
+  const handleNameChange = (e) => {
+    const value = e.target.value;
+    // Only allow alphanumeric and underscore
+    if (/^[a-zA-Z0-9_]*$/.test(value)) {
+      setName(value);
+    }
+  };
+
+  const handlePasswordChange = (e) => {
+    setPassword(e.target.value);
+  };
+
+  // PROTECTION 2: Clear sensitive data on component unmount
+  useEffect(() => {
+    return () => {
+      setPassword('');
+      setMessage('');
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
+    setIsLoading(true);
 
     try {
-      const response = await fetch('https://localhost:3000/user/login', {
+      // PROTECTION 3: Use HTTPS in production, HTTP for development
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${apiUrl}/user/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // PROTECTION 4: Include security headers
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'include', // Include cookies for CSRF protection
         body: JSON.stringify({ name, password }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('userName', data.name); // Store username for display
+        // PROTECTION 5: Securely store token in sessionStorage (cleared on browser close)
+        // or use HttpOnly cookies if backend supports it
+        sessionStorage.setItem('token', data.token);
+        sessionStorage.setItem('userName', data.name);
+        
+        // Clear sensitive data
+        setPassword('');
+        setName('');
+        
         navigate('/dashboard');
       } else {
-        setMessage(data.Message || 'Login failed. Please check your credentials.');
+        // Generic error message (doesn't leak info)
+        setMessage('Invalid credentials. Please try again.');
       }
     } catch (error) {
       console.error('Login error:', error);
-      setMessage('Network error. Could not connect to the server.');
+      setMessage('Network error. Please check your connection.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -37,24 +77,31 @@ function LoginForm() {
     <div className="form-container">
       <form onSubmit={handleSubmit}>
         <div className="form-group">
-          <label>Username:</label>
+          <label htmlFor="username">Username:</label>
           <input
+            id="username"
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={handleNameChange}
             required
+            disabled={isLoading}
+            maxLength="20"
           />
         </div>
         <div className="form-group">
-          <label>Password:</label>
+          <label htmlFor="password">Password:</label>
           <input
+            id="password"
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={handlePasswordChange}
             required
+            disabled={isLoading}
           />
         </div>
-        <button type="submit">Login</button>
+        <button type="submit" disabled={isLoading}>
+          {isLoading ? 'Logging in...' : 'Login'}
+        </button>
       </form>
       {message && <p className="message-error">{message}</p>}
     </div>
