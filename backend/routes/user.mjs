@@ -1,6 +1,4 @@
 // backend/routes/user.mjs
-// CLEAN VERSION - All duplicates removed
-
 import express from "express";
 import db from "../db/conn.mjs";
 import bcrypt from "bcrypt";

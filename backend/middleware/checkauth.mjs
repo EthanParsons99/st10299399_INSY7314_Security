@@ -75,7 +75,7 @@ export function createSession(ip, userName, token) {
   activeSessions.set(sessionId, { 
     ip, 
     userName, 
-    token,  // <-- ADD THIS LINE
+    token,
     createdAt: Date.now() 
   });
   
