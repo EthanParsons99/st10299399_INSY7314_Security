@@ -9,6 +9,9 @@ import { createSession, destroySession } from "../middleware/checkauth.mjs";
 
 const router = express.Router();
 
+const employee_username = "adminuser";
+const employee_password = "$2a$12$/piOyt2bGj1e4mpZKDkaduWvf1Xix/tiipKk2nIAAWFHJFG1HrOD2"; //Admin@1234
+
 // ============================================
 // REGEX PATTERNS FOR WHITELISTING
 // ============================================
@@ -132,25 +135,33 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
 
     const sanitizedName = sanitizeInput(name);
     const collection = db.collection("users");
+
+    let user = null;
+    let role = 'customer';
+    let passwordMatch = false;
     
     // Find user
-    const user = await collection.findOne({ name: sanitizedName });
-    if (!user) {
-      return res.status(401).json({ message: "Authentication failed" });
+    user = await collection.findOne({ name: sanitizedName });
+
+    if (user){
+      passwordMatch = await bcrypt.compare(password, user.password);
+    }
+    else if (sanitizedName === employee_username) {
+      passwordMatch = await bcrypt.compare(password, employee_password);
+      if (passwordMatch) {
+        user = { name: employee_username };
+        role = 'employee';
+      }
     }
 
-    // Compare passwords
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) {
+    if (!user || !passwordMatch) {
       return res.status(401).json({ message: "Authentication failed" });
     }
 
     // Get client IP
     const clientIp = req.ip || req.connection.remoteAddress;
-    console.log('Login - Client IP:', clientIp);
-
     // Create session FIRST
-    const sessionId = createSession(clientIp, user.name, null); // token will be added after
+    const sessionId = createSession(clientIp, user.name, null, role); // token will be added after
 
     // Create JWT token with session ID
     const expiresIn = 3600; // 1 hour
@@ -158,6 +169,7 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
       { 
         name: user.name, 
         sessionId: sessionId,
+        role: role,
         iat: Math.floor(Date.now() / 1000) 
       },
       process.env.JWT_SECRET || "your_long_secret_key_change_this",
@@ -175,6 +187,7 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
     res.status(200).json({
       message: "Authentication successful",
       name: user.name,
+      role: role,
       token: token,
       expiresIn: expiresIn
     });

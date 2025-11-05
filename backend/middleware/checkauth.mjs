@@ -57,7 +57,8 @@ export default (req, res, next) => {
     // Token is valid, attach user data to request
     req.userData = { 
       name: decodedToken.name,
-      sessionId: sessionId
+      sessionId: sessionId,
+      role: decodedToken.role
     };
 
     next();
@@ -68,7 +69,7 @@ export default (req, res, next) => {
   }
 };
 
-export function createSession(ip, userName, token) {
+export function createSession(ip, userName, token, role = 'customer') {
   const sessionId = crypto.randomUUID();
   
   // Store the token as well (for verification)
@@ -76,10 +77,11 @@ export function createSession(ip, userName, token) {
     ip, 
     userName, 
     token,
+    role,
     createdAt: Date.now() 
   });
   
-  console.log('Session created:', sessionId, 'for user:', userName, 'from IP:', ip);
+  console.log('Session created:', sessionId, 'for user:', userName, 'from IP:', ip, 'with role:', role);
   return sessionId;
 }
 
@@ -87,3 +89,11 @@ export function destroySession(sessionId) {
   console.log('Session destroyed:', sessionId);
   activeSessions.delete(sessionId);
 }
+
+export const checkEmployeeRole = (req, res, next) => {
+  if (req.userData && req.userData.role === 'employee') {
+    next();
+  } else {
+    return res.status(403).json({ message: "Forbidden: Insufficient permissions." });
+  }
+};
