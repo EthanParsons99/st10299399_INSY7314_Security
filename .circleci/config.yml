@@ -109,7 +109,7 @@ jobs:
 # WORKFLOWS: Define the order of jobs
 # ---------------------------------------------
 workflows:
-  build-and-test: # You can name your workflow anything
+  build-and-test:
     jobs:
       - sonar_scan
       - api_test:
