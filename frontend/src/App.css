@@ -356,3 +356,31 @@ button:hover {
   margin: inherit;
   letter-spacing: inherit;
 }
+
+
+.status {
+  padding: 5px 12px;
+  border-radius: 50px;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: capitalize;
+  display: inline-block; /* Ensures badge displays correctly */
+}
+
+/* Yellow badge for pending status */
+.status-pending {
+  background-color: #fff9c4;
+  color: #f57f17;
+}
+
+/* Green badge for approved status */
+.status-approved {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+/* Red badge for rejected status */
+.status-rejected {
+  background-color: #fbe9e7;
+  color: #c62828;
+}

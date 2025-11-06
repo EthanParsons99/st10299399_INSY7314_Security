@@ -2,6 +2,7 @@
 
 import posts from "./routes/post.mjs";
 import users from "./routes/user.mjs";
+import employees from "./routes/employee.mjs";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -33,16 +34,25 @@ app.use(helmet({
 
 const corsOptions = {
   origin: [
+    // Customer Portal Ports
     'http://localhost:3001',
     'https://localhost:3001',
-    'http://12_7.0.0.1:3001',
+    'http://127.0.0.1:3001',
     'https://127.0.0.1:3001',
+    
+    // Employee Portal Ports (NEW)
+    'http://localhost:3002',
+    'https://localhost:3002',
+    'http://127.0.0.1:3002',
+    'https://127.0.0.1:3002',
+    
+    // Other common dev ports
     'http://localhost:5173',
     'http://127.0.0.1:5173'
   ],
   credentials: true,
   optionsSuccessStatus: 200,
-  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 app.use(cors(corsOptions));
@@ -60,6 +70,7 @@ app.use((req, res, next) => {
 
 app.use("/post", posts);
 app.use("/user", users);
+app.use("/employee", employees);
 
 // This section sets up the HTTPS server using your SSL keys
 const options = {

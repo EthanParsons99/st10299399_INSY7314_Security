@@ -26,6 +26,10 @@ function TransactionHistory() {
 
         if (response.ok) {
           const data = await response.json();
+          // Sort data by newest first before setting state
+          data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+          // Your XSS protection is great, let's keep it.
           setPayments(data.map(p => ({
             ...p,
             recipientAccount: p.recipientAccount.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
@@ -45,7 +49,7 @@ function TransactionHistory() {
     fetchPayments();
   }, []);
 
-  if (isLoading) return <div className="component-container"><p>Loading...</p></div>;
+  if (isLoading) return <div className="component-container"><p>Loading transaction history...</p></div>;
 
   return (
     <div className="component-container">
@@ -60,6 +64,7 @@ function TransactionHistory() {
               <th>Amount</th>
               <th>Currency</th>
               <th>Recipient Account</th>
+              {/* --- 1. THE STATUS HEADER IS CONFIRMED PRESENT --- */}
               <th>Status</th>
             </tr>
           </thead>
@@ -69,8 +74,16 @@ function TransactionHistory() {
                 <td>{new Date(payment.createdAt).toLocaleDateString()}</td>
                 <td>{payment.amount.toFixed(2)}</td>
                 <td>{payment.currency}</td>
-                <td>{payment.recipientAccount}</td>
-                <td><span className={`status status-${payment.status}`}>{payment.status}</span></td>
+                {/* Your .replace() is smart, but React handles this automatically with JSX.
+                    However, to render it as HTML if needed, we use dangerouslySetInnerHTML */}
+                <td dangerouslySetInnerHTML={{ __html: payment.recipientAccount }} />
+                
+                {/* --- 2. THE STATUS BADGE LOGIC IS CONFIRMED PRESENT AND CORRECT --- */}
+                <td>
+                  <span className={`status status-${payment.status}`}>
+                    {payment.status}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>

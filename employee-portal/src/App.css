@@ -1,0 +1,182 @@
+/* --- 1. Color Palette & Global Variables (Copied from Customer Portal) --- */
+:root {
+  --primary-green: #98d4a8;
+  --dark-green: #658a6e;
+  --light-green-bg: #cfe3d3;
+  --white: #ffffff;
+  --black: #000000;
+  --destructive-red: #e57373;
+  --destructive-red-hover: #ef5350;
+  --approve-green: #28a745;
+  --approve-green-hover: #218838;
+  --border-radius-md: 12px;
+  --border-radius-lg: 24px;
+  --box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
+  --font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* --- 2. Global Styles (Copied from Customer Portal) --- */
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  background-color: var(--light-green-bg);
+  color: var(--dark-green);
+}
+.App {
+  width: 100%;
+}
+
+/* --- 3. Login Page Layout (Reused from Customer Portal) --- */
+.auth-layout {
+  display: flex;
+  width: 100%;
+  max-width: 1000px;
+  min-height: 600px;
+  margin: 40px auto;
+  background-color: var(--white);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--box-shadow);
+  overflow: hidden;
+}
+.auth-branding {
+  flex: 1;
+  background-color: var(--primary-green);
+  color: var(--white);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  text-align: center;
+}
+.auth-branding h1 { font-size: 80px; font-weight: 900; margin: 0; letter-spacing: 2px; }
+.auth-branding p { font-size: 18px; margin-top: 10px; opacity: 0.9; }
+.auth-form-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 50px;
+}
+.auth-form-container h2 { color: var(--black); margin-bottom: 30px; text-align: center; }
+
+/* --- 4. Form & Button Styles (Reused from Customer Portal) --- */
+.form-container, form { width: 100%; }
+.form-group { margin-bottom: 20px; }
+.form-group label { display: block; margin-bottom: 8px; font-weight: 600; }
+input[type="text"], input[type="password"] {
+  width: 100%;
+  padding: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: var(--border-radius-md);
+  box-sizing: border-box;
+  font-size: 16px;
+}
+input:focus {
+  outline: none;
+  border-color: var(--primary-green);
+  box-shadow: 0 0 0 3px rgba(152, 212, 168, 0.3);
+}
+button {
+  width: 100%;
+  padding: 15px;
+  background-color: var(--dark-green);
+  color: var(--white);
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: background-color 0.3s, transform 0.2s;
+}
+button:hover {
+  background-color: var(--primary-green);
+  color: var(--black);
+  transform: translateY(-2px);
+}
+
+/* --- 5. Message Styles --- */
+.message-error {
+  margin-top: 15px;
+  padding: 12px;
+  border-radius: var(--border-radius-md);
+  text-align: center;
+  background-color: #fbe9e7;
+  color: #c62828;
+}
+
+/* --- 6. Dashboard Styles (Adapted for Employee Portal) --- */
+.dashboard-container {
+  max-width: 1200px; /* Wider for tables */
+  margin: 40px auto;
+  background: var(--white);
+  padding: 40px;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--box-shadow);
+}
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 20px;
+  margin-bottom: 40px;
+}
+.header-branding .app-name { font-size: 28px; font-weight: 800; color: var(--black); margin: 0; line-height: 1; }
+.header-branding .app-subtitle { font-size: 14px; color: var(--dark-green); }
+.header-user-controls { display: flex; align-items: center; gap: 20px; }
+.welcome-message { font-weight: 600; color: var(--dark-green); }
+.button-logout {
+  width: auto;
+  padding: 12px 25px;
+  background-color: var(--destructive-red);
+}
+.button-logout:hover {
+  background-color: var(--destructive-red-hover);
+  color: var(--white);
+}
+.dashboard-content-full { /* New class for single-column content */
+  grid-column: 1 / -1; /* Makes content span full width */
+}
+.component-container {
+  background: #fdfdfd;
+  border: 1px solid #f0f0f0;
+  padding: 30px;
+  border-radius: var(--border-radius-lg);
+}
+.component-container h3 { margin-top: 0; color: var(--black); border-bottom: 1px solid #eee; padding-bottom: 15px; }
+
+/* --- 7. Table Styles (Reused & Enhanced for Employee Portal) --- */
+.transaction-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+.transaction-table th, .transaction-table td {
+  padding: 15px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+.transaction-table th { font-size: 14px; font-weight: 600; color: var(--dark-green); }
+.transaction-table tbody tr:hover { background-color: #f9f9f9; }
+.actions-cell { display: flex; gap: 10px; }
+.btn-action { /* Shared style for approve/reject buttons */
+  width: auto;
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+.btn-approve {
+  background-color: var(--approve-green);
+}
+.btn-approve:hover {
+  background-color: var(--approve-green-hover);
+  color: var(--white);
+}
+.btn-reject {
+  background-color: var(--destructive-red);
+}
+.btn-reject:hover {
+  background-color: var(--destructive-red-hover);
+  color: var(--white);
+}
