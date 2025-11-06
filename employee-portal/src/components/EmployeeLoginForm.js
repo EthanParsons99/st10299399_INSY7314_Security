@@ -8,11 +8,13 @@ function EmployeeLoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
     setIsLoading(true);
 
+    // Basic validation
     try {
       const response = await fetch('https://localhost:3000/user/login', {
         method: 'POST',
@@ -22,6 +24,7 @@ function EmployeeLoginForm() {
 
       const data = await response.json();
 
+      // Check for employee role
       if (response.ok && data.role === 'employee') {
         sessionStorage.setItem('employeeToken', data.token);
         sessionStorage.setItem('employeeName', data.name);
@@ -37,6 +40,7 @@ function EmployeeLoginForm() {
     }
   };
 
+  // Render the login form
   return (
     <div className="form-container">
       <form onSubmit={handleSubmit}>

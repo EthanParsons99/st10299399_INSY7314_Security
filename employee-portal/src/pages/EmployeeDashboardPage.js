@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import PendingPaymentsTable from '../components/PendingPaymentsTable';
 
+// EmployeeDashboardPage component displaying pending payments and logout functionality
 function EmployeeDashboardPage() {
   const navigate = useNavigate();
   const employeeName = sessionStorage.getItem('employeeName');
@@ -12,6 +13,7 @@ function EmployeeDashboardPage() {
     navigate('/login');
   };
 
+  // Render the employee dashboard with pending payments table
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">

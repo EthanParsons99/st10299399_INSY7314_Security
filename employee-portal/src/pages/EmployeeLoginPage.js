@@ -1,6 +1,7 @@
 import React from 'react';
 import EmployeeLoginForm from '../components/EmployeeLoginForm';
 
+// EmployeeLoginPage component for employee authentication
 function EmployeeLoginPage() {
   return (
     <div className="auth-layout">

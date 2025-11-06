@@ -1,4 +1,4 @@
-/* --- 1. Color Palette & Global Variables (Copied from Customer Portal) --- */
+/* --- Color Palette & Global Variables --- */
 :root {
   --primary-green: #98d4a8;
   --dark-green: #658a6e;
@@ -15,7 +15,7 @@
   --font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* --- 2. Global Styles (Copied from Customer Portal) --- */
+/* --- Global Styles --- */
 body {
   margin: 0;
   font-family: var(--font-family);
@@ -26,7 +26,7 @@ body {
   width: 100%;
 }
 
-/* --- 3. Login Page Layout (Reused from Customer Portal) --- */
+/* --- Login Page Layout --- */
 .auth-layout {
   display: flex;
   width: 100%;
@@ -60,7 +60,7 @@ body {
 }
 .auth-form-container h2 { color: var(--black); margin-bottom: 30px; text-align: center; }
 
-/* --- 4. Form & Button Styles (Reused from Customer Portal) --- */
+/* --- Form & Button Styles --- */
 .form-container, form { width: 100%; }
 .form-group { margin-bottom: 20px; }
 .form-group label { display: block; margin-bottom: 8px; font-weight: 600; }
@@ -95,7 +95,7 @@ button:hover {
   transform: translateY(-2px);
 }
 
-/* --- 5. Message Styles --- */
+/* --- Message Styles --- */
 .message-error {
   margin-top: 15px;
   padding: 12px;
@@ -105,9 +105,9 @@ button:hover {
   color: #c62828;
 }
 
-/* --- 6. Dashboard Styles (Adapted for Employee Portal) --- */
+/* --- Dashboard Styles --- */
 .dashboard-container {
-  max-width: 1200px; /* Wider for tables */
+  max-width: 1200px;
   margin: 40px auto;
   background: var(--white);
   padding: 40px;
@@ -135,8 +135,8 @@ button:hover {
   background-color: var(--destructive-red-hover);
   color: var(--white);
 }
-.dashboard-content-full { /* New class for single-column content */
-  grid-column: 1 / -1; /* Makes content span full width */
+.dashboard-content-full { 
+  grid-column: 1 / -1; 
 }
 .component-container {
   background: #fdfdfd;
@@ -146,7 +146,7 @@ button:hover {
 }
 .component-container h3 { margin-top: 0; color: var(--black); border-bottom: 1px solid #eee; padding-bottom: 15px; }
 
-/* --- 7. Table Styles (Reused & Enhanced for Employee Portal) --- */
+/* --- Table Styles --- */
 .transaction-table {
   width: 100%;
   border-collapse: collapse;
@@ -160,7 +160,7 @@ button:hover {
 .transaction-table th { font-size: 14px; font-weight: 600; color: var(--dark-green); }
 .transaction-table tbody tr:hover { background-color: #f9f9f9; }
 .actions-cell { display: flex; gap: 10px; }
-.btn-action { /* Shared style for approve/reject buttons */
+.btn-action { 
   width: auto;
   padding: 8px 16px;
   font-size: 14px;

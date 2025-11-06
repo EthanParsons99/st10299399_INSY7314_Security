@@ -4,11 +4,20 @@ import db from "../db/conn.mjs";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
-import { validateInput, sanitizeInput, validationRules } from "../middleware/inputValidation.mjs";
+import { sanitizeInput } from "../middleware/inputValidation.mjs"; // Assuming sanitizeInput is exported
 import { createSession, destroySession } from "../middleware/checkauth.mjs";
 
 const router = express.Router();
 
+// --- NEW HELPER FUNCTION ---
+function generateAccountNumber() {
+  let accountNumber = '';
+  for (let i = 0; i < 10; i++) {
+    accountNumber += Math.floor(Math.random() * 10);
+  }
+  return accountNumber;
+}
+// --- END NEW HELPER FUNCTION ---
 
 // ============================================
 // REGEX PATTERNS FOR WHITELISTING
@@ -16,6 +25,7 @@ const router = express.Router();
 const nameRegex = /^[a-zA-Z0-9._]{3,20}$/;
 const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 const basicPasswordRegex = /^[A-Za-z\d@$!%*?&]{8,100}$/;
+const accountNumberRegex = /^\d{10}$/; // --- NEW ---
 
 // ============================================
 // VALIDATION MIDDLEWARE
@@ -43,24 +53,32 @@ const validateSignupInput = (req, res, next) => {
   next();
 };
 
-// LOGIN validation (less strict on password complexity, still checks format)
+// --- MODIFIED LOGIN VALIDATION ---
 const validateLoginInput = (req, res, next) => {
-  const { name, password } = req.body;
+  const { name, password, accountNumber } = req.body;
 
   if (!name || !password) {
     return res.status(400).json({ message: "Name and password are required" });
   }
 
+  // First, check the name format for everyone
   if (!nameRegex.test(name)) {
-    return res.status(400).json({ 
-      message: "Invalid name format." 
-    });
+    return res.status(400).json({ message: "Invalid name format." });
   }
 
+  // If the user IS NOT the employee, they MUST provide a valid account number
+  if (name !== process.env.EMPLOYEE_USERNAME) {
+    if (!accountNumber) {
+      return res.status(400).json({ message: "Account number is required for customer login." });
+    }
+    if (!accountNumberRegex.test(accountNumber)) {
+      return res.status(400).json({ message: "Invalid account number format. Must be 10 digits." });
+    }
+  }
+
+  // Finally, check password format for everyone
   if (!basicPasswordRegex.test(password)) {
-    return res.status(400).json({ 
-      message: "Invalid login credentials format." 
-    });
+    return res.status(400).json({ message: "Invalid login credentials format." });
   }
   
   next();
@@ -71,7 +89,7 @@ const validateLoginInput = (req, res, next) => {
 // ============================================
 
 const loginLimiter = rateLimit({
-  windowMs: 2 * 60 * 1000, // 2 minutes
+  windowMs: 2 * 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
@@ -80,13 +98,13 @@ const loginLimiter = rateLimit({
 });
 
 const signupLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
+  windowMs: 60 * 60 * 1000,
   max: 10,
   message: 'Too many signup attempts. Please try again later.'
 });
 
 // ============================================
-// SIGNUP ROUTE
+// MODIFIED SIGNUP ROUTE
 // ============================================
 router.post("/signup", signupLimiter, validateSignupInput, async (req, res) => {
   try {
@@ -95,19 +113,28 @@ router.post("/signup", signupLimiter, validateSignupInput, async (req, res) => {
     const sanitizedName = sanitizeInput(name);
     const collection = db.collection("users");
     
-    // Check if user already exists
     const existingUser = await collection.findOne({ name: sanitizedName });
     if (existingUser) {
       return res.status(409).json({ message: "User already exists" });
     }
 
-    // Hash password
+    // --- NEW: GENERATE UNIQUE ACCOUNT NUMBER ---
+    let accountNumber;
+    let isUnique = false;
+    while (!isUnique) {
+      accountNumber = generateAccountNumber();
+      const existingAccount = await collection.findOne({ accountNumber });
+      if (!existingAccount) {
+        isUnique = true;
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Create new user
     const newDocument = { 
       name: sanitizedName, 
       password: hashedPassword, 
+      accountNumber: accountNumber, // <-- MODIFIED
       createdAt: new Date() 
     };
     
@@ -115,7 +142,8 @@ router.post("/signup", signupLimiter, validateSignupInput, async (req, res) => {
 
     res.status(201).json({ 
       message: "Signup successful", 
-      userId: result.insertedId 
+      userId: result.insertedId,
+      accountNumber: accountNumber // <-- MODIFIED
     });
     
   } catch (error) {
@@ -125,11 +153,11 @@ router.post("/signup", signupLimiter, validateSignupInput, async (req, res) => {
 });
 
 // ============================================
-// LOGIN ROUTE
+// MODIFIED LOGIN ROUTE
 // ============================================
 router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
   try {
-    const { name, password } = req.body;
+    const { name, password, accountNumber } = req.body; // <-- MODIFIED
 
     const sanitizedName = sanitizeInput(name);
     const collection = db.collection("users");
@@ -138,17 +166,18 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
     let role = 'customer';
     let passwordMatch = false;
     
-    // Find user
-    user = await collection.findOne({ name: sanitizedName });
-
-    if (user){
-      passwordMatch = await bcrypt.compare(password, user.password);
-    }
-    else if (sanitizedName === process.env.EMPLOYEE_USERNAME) {
+    // --- MODIFIED: Handle Customer vs Employee Login ---
+    if (sanitizedName === process.env.EMPLOYEE_USERNAME) {
       passwordMatch = await bcrypt.compare(password, process.env.EMPLOYEE_PASSWORD);
       if (passwordMatch) {
-        user = { name: process.env.EMPLOYEE_USERNAME };
+        user = { name: process.env.EMPLOYEE_USERNAME }; // Keep user object simple
         role = 'employee';
+      }
+    } else {
+      // Customer login now requires all three fields for lookup
+      user = await collection.findOne({ name: sanitizedName, accountNumber: accountNumber });
+      if (user) {
+        passwordMatch = await bcrypt.compare(password, user.password);
       }
     }
 
@@ -156,25 +185,16 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
       return res.status(401).json({ message: "Authentication failed" });
     }
 
-    // Get client IP
     const clientIp = req.ip || req.connection.remoteAddress;
-    // Create session FIRST
-    const sessionId = createSession(clientIp, user.name, null, role); // token will be added after
+    const sessionId = createSession(clientIp, user.name, null, role);
 
-    // Create JWT token with session ID
-    const expiresIn = 3600; // 1 hour
+    const expiresIn = 3600;
     const token = jwt.sign(
-      { 
-        name: user.name, 
-        sessionId: sessionId,
-        role: role,
-        iat: Math.floor(Date.now() / 1000) 
-      },
+      { name: user.name, sessionId: sessionId, role: role },
       process.env.JWT_SECRET || "your_long_secret_key_change_this",
       { expiresIn }
     );
 
-    // Update session with the final token
     const { activeSessions } = await import("../middleware/checkauth.mjs");
     if (activeSessions.has(sessionId)) {
       const session = activeSessions.get(sessionId);
@@ -187,7 +207,8 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
       name: user.name,
       role: role,
       token: token,
-      expiresIn: expiresIn
+      expiresIn: expiresIn,
+      accountNumber: user.accountNumber // <-- MODIFIED (will be undefined for employee, which is fine)
     });
 
   } catch (error) {
@@ -197,7 +218,7 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
 });
 
 // ============================================
-// LOGOUT ROUTE
+// LOGOUT ROUTE (Unchanged)
 // ============================================
 router.post("/logout", (req, res) => {
   try {

@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
+// Component to display and manage pending payments
 function PendingPaymentsTable() {
   const [payments, setPayments] = useState([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch pending payments from the API
   const fetchPayments = useCallback(async () => {
     setIsLoading(true);
     setError('');
     const token = sessionStorage.getItem('employeeToken');
 
+    // If no token is found, set an error
     try {
       const response = await fetch('https://localhost:3000/employee/payments', {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -22,6 +25,7 @@ function PendingPaymentsTable() {
         throw new Error('Failed to fetch payments. The API endpoint may not be ready.');
       }
       
+      // Parse the JSON response
       const data = await response.json();
       setPayments(data);
     } catch (err) {
@@ -35,9 +39,9 @@ function PendingPaymentsTable() {
     fetchPayments();
   }, [fetchPayments]);
 
+  // Handle approval or rejection of a payment
   const handleUpdateStatus = async (paymentId, newStatus) => {
     const token = sessionStorage.getItem('employeeToken');
-    // Optimistic UI update: remove the payment from the list immediately
     setPayments(prevPayments => prevPayments.filter(p => p._id !== paymentId));
 
     try {
@@ -63,6 +67,7 @@ function PendingPaymentsTable() {
   if (isLoading) return <p>Loading pending payments...</p>;
   if (error) return <p className="message-error">{error}</p>;
 
+  // Render the table of pending payments
   return (
     <div className="component-container">
       <h3>Pending Customer Payments</h3>
@@ -73,6 +78,7 @@ function PendingPaymentsTable() {
           <thead>
             <tr>
               <th>Customer</th>
+              <th>Customer Account</th>
               <th>Date</th>
               <th>Amount</th>
               <th>Currency</th>
@@ -85,6 +91,7 @@ function PendingPaymentsTable() {
             {payments.map((p) => (
               <tr key={p._id}>
                 <td>{p.owner}</td>
+                <td>{p.customerAccountNumber || 'N/A'}</td>
                 <td>{new Date(p.createdAt).toLocaleDateString()}</td>
                 <td>{p.amount.toFixed(2)}</td>
                 <td>{p.currency}</td>

@@ -1,11 +1,11 @@
 // frontend/src/components/LoginForm.js
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 function LoginForm() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const [accountNumber, setAccountNumber] = useState(''); // <-- ADDED
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -21,10 +21,18 @@ function LoginForm() {
     setPassword(e.target.value);
   };
 
+  const handleAccountNumberChange = (e) => { // <-- ADDED
+    const value = e.target.value;
+    if (/^[0-9]*$/.test(value)) {
+      setAccountNumber(value);
+    }
+  };
+
   useEffect(() => {
     return () => {
       setPassword('');
       setMessage('');
+      setAccountNumber(''); // <-- ADDED
     };
   }, []);
 
@@ -34,7 +42,7 @@ function LoginForm() {
     setIsLoading(true);
 
     try {
-      const apiUrl = 'https://localhost:3000'; // Make sure this is HTTPS
+      const apiUrl = 'https://localhost:3000';
       const response = await fetch(`${apiUrl}/user/login`, {
         method: 'POST',
         headers: {
@@ -42,7 +50,7 @@ function LoginForm() {
           'X-Requested-With': 'XMLHttpRequest'
         },
         credentials: 'include', 
-        body: JSON.stringify({ name, password }), // Body only contains name and password
+        body: JSON.stringify({ name, password, accountNumber }), // <-- MODIFIED
       });
 
       const data = await response.json();
@@ -50,9 +58,11 @@ function LoginForm() {
       if (response.ok) {
         sessionStorage.setItem('token', data.token);
         sessionStorage.setItem('userName', data.name);
+        sessionStorage.setItem('accountNumber', data.accountNumber); // <-- ADDED
         
         setPassword('');
         setName('');
+        setAccountNumber(''); // <-- ADDED
         
         navigate('/dashboard');
       } else {
@@ -90,6 +100,19 @@ function LoginForm() {
             onChange={handlePasswordChange}
             required
             disabled={isLoading}
+          />
+        </div>
+        {/* --- NEW FIELD ADDED HERE --- */}
+        <div className="form-group">
+          <label htmlFor="accountNumber">Account Number:</label>
+          <input
+            id="accountNumber"
+            type="text"
+            value={accountNumber}
+            onChange={handleAccountNumberChange}
+            required
+            disabled={isLoading}
+            placeholder="Your 10-digit account number"
           />
         </div>
         <button type="submit" disabled={isLoading}>

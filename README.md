@@ -1,4 +1,4 @@
-# Secure Customer International Payments Portal
+# Secure Customer/Admin International Payments Portal
 
 - **Ethan Parsons** - ST10299399
 - **Calwyn Govender** - ST10303017

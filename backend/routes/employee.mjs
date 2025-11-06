@@ -9,15 +9,62 @@ const router = express.Router();
 
 // ROUTE 1: FETCH PENDING PAYMENTS
 router.get("/payments", checkauth, checkEmployeeRole, async (req, res) => {
-  try {
-    const collection = db.collection("payments");
-    const pendingPayments = await collection.find({ status: "pending" }).sort({ createdAt: -1 }).toArray();
-    res.status(200).json(pendingPayments);
-  } catch (error) {
-    console.error("Error fetching pending payments:", error);
-    res.status(500).json({ message: "Failed to retrieve pending payments." });
-  }
-});
+    try {
+      const paymentsCollection = db.collection("payments");
+  
+      // Aggregation pipeline to join 'payments' with 'users'
+      const pipeline = [
+        {
+          // Step 1: Find all pending payments
+          $match: { status: "pending" }
+        },
+        {
+          // Step 2: Perform a left join to the 'users' collection
+          $lookup: {
+            from: "users", // The collection to join with
+            localField: "owner", // The field from the 'payments' collection
+            foreignField: "name", // The field from the 'users' collection
+            as: "userDetails" // The name for the new array field
+          }
+        },
+        {
+          // Step 3: Deconstruct the 'userDetails' array
+          $unwind: {
+            path: "$userDetails",
+            preserveNullAndEmptyArrays: true // Keep payments even if user is not found
+          }
+        },
+        {
+          // Step 4: Reshape the output document
+          $project: {
+            // Keep all original payment fields
+            _id: 1,
+            amount: 1,
+            currency: 1,
+            provider: 1,
+            recipientAccount: 1,
+            swiftCode: 1,
+            status: 1,
+            owner: 1,
+            createdAt: 1,
+            // Add the accountNumber from the joined user document
+            customerAccountNumber: "$userDetails.accountNumber" 
+          }
+        },
+        {
+          // Step 5: Sort by newest first
+          $sort: { createdAt: -1 }
+        }
+      ];
+  
+      const pendingPaymentsWithDetails = await paymentsCollection.aggregate(pipeline).toArray();
+      res.status(200).json(pendingPaymentsWithDetails);
+  
+    } catch (error) {
+      console.error("Error fetching pending payments:", error);
+      res.status(500).json({ message: "Failed to retrieve pending payments." });
+    }
+  });
 
 
 
