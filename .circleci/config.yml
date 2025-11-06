@@ -79,7 +79,8 @@ jobs:
           command: |
             echo "--- Testing Rate Limiter ---"
             LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
-            LOGIN_URL="https://localhost:3000/user/login"
+            # FIX: Changed localhost to 127.0.0.1 for reliable connection in the container
+            LOGIN_URL="https://127.0.0.1:3000/user/login"
             
             # Attempt login 6 times (your rate limit is 5)
             for i in $(seq 1 6); do
@@ -96,7 +97,8 @@ jobs:
       - run:
           name: Test Employee Endpoint Authorization (Unauthenticated)
           command: |
-            EMPLOYEE_URL="https://localhost:3000/employee/payments"
+            # FIX: Changed localhost to 127.0.0.1 for reliable connection in the container
+            EMPLOYEE_URL="https://127.0.0.1:3000/employee/payments"
             UNAUTH_STATUS=$(curl --insecure -s -o /dev/null -w "%{http_code}" $EMPLOYEE_URL)
             if [ "$UNAUTH_STATUS" -ne 401 ]; then
               echo "FAIL: Unauthenticated access to $EMPLOYEE_URL returned $UNAUTH_STATUS (Expected 401)."
