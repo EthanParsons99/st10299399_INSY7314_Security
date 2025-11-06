@@ -66,12 +66,36 @@ jobs:
             cd backend
             # Note: For this to work, you MUST add ATLAS_URI, JWT_SECRET, EMPLOYEE_USERNAME,
             # and EMPLOYEE_PASSWORD as Environment Variables in your CircleCI Project Settings.
+            # Using npm start if package.json has a start script, or node server.mjs
             node server.mjs &
           background: true
           
-      - run: 
-          name: Wait for Server to Start
-          command: sleep 15 # Give server time to initialize
+      # 🚨 FIX: Replaced 'sleep 15' with a robust polling loop. 🚨
+      - run:
+          name: Wait for Server to Be Accessible
+          command: |
+            # Use 127.0.0.1 for reliable container networking
+            SERVER_URL="https://127.0.0.1:3000"
+            MAX_ATTEMPTS=10
+            ATTEMPT=1
+            
+            echo "Waiting for backend server at $SERVER_URL to start..."
+            
+            while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+              # curl -s (silent), -k (insecure/skip cert), -f (fail fast on HTTP error)
+              # Check if the connection succeeds (status code 000 is for connection success)
+              if curl -skf --head $SERVER_URL; then
+                echo "Server is UP and responsive after $ATTEMPT attempts."
+                exit 0 # Success
+              fi
+              
+              echo "Attempt $ATTEMPT of $MAX_ATTEMPTS failed. Sleeping for 3 seconds..."
+              sleep 3
+              ATTEMPT=$((ATTEMPT + 1))
+            done
+            
+            echo "FAIL: Server did not become responsive after $MAX_ATTEMPTS attempts."
+            exit 1 # Failure
       
       # Test 1: Rate Limiter (Brute-Force/DDoS Protection)
       - run:
@@ -79,10 +103,11 @@ jobs:
           command: |
             echo "--- Testing Rate Limiter ---"
             LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
-            # FIX: Changed localhost to 127.0.0.1 for reliable connection in the container
+            # FIX: Change localhost to 127.0.0.1 for reliable connectivity inside the Docker container
             LOGIN_URL="https://127.0.0.1:3000/user/login"
             
             # Attempt login 6 times (your rate limit is 5)
+            # Use 'for i in $(seq 1 6); do' for better cross-shell compatibility in CircleCI
             for i in $(seq 1 6); do
               STATUS_CODE=$(curl --insecure -s -o /dev/null -w "%{http_code}" $LOGIN_URL -H "Content-Type: application/json" -d "$LOGIN_DATA")
               echo "Attempt $i: Status Code $STATUS_CODE"
@@ -97,7 +122,7 @@ jobs:
       - run:
           name: Test Employee Endpoint Authorization (Unauthenticated)
           command: |
-            # FIX: Changed localhost to 127.0.0.1 for reliable connection in the container
+            # FIX: Change localhost to 127.0.0.1 for reliable connectivity inside the Docker container
             EMPLOYEE_URL="https://127.0.0.1:3000/employee/payments"
             UNAUTH_STATUS=$(curl --insecure -s -o /dev/null -w "%{http_code}" $EMPLOYEE_URL)
             if [ "$UNAUTH_STATUS" -ne 401 ]; then
