@@ -114,4 +114,4 @@ workflows:
       - sonar_scan
       - api_test:
           requires:
-            - sonar_scan
+            - sonar_scan
