@@ -275,3 +275,84 @@ button:hover {
   background-color: #fff9c4;
   color: #f57f17;
 }
+
+.auth-form-container h2, 
+.landing-intro-text {
+  text-align: center;
+}
+
+.landing-intro-text {
+  margin-bottom: 30px;
+  font-size: 16px;
+  color: #555;
+  line-height: 1.6;
+}
+
+/* This container will make the buttons look like they're in a form */
+.landing-actions-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Override existing .btn styles to make them full-width and uniform */
+.landing-actions-form .btn {
+  display: flex; 
+  justify-content: center; 
+  align-items: center; 
+  width: 100%;
+  padding: 15px;
+  border-radius: 50px;
+  font-size: 16px;
+  font-weight: bold;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  box-sizing: border-box; 
+}
+
+/* --- ADDED THESE LINES BACK --- */
+.landing-actions-form .btn-primary {
+  background-color: var(--dark-green);
+  color: var(--white);
+  border: 2px solid var(--dark-green); /* Added for consistent sizing */
+}
+
+.landing-actions-form .btn-secondary {
+  background-color: transparent;
+  color: var(--dark-green);
+  border: 2px solid var(--dark-green);
+}
+
+/* --- HOVER STYLES --- */
+.landing-actions-form .btn-primary:hover {
+  background-color: var(--primary-green);
+  color: var(--black);
+  border-color: var(--primary-green); /* Match border on hover */
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.landing-actions-form .btn-secondary:hover {
+  background-color: var(--dark-green);
+  color: var(--white);
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+/* Remove old landing page styles that are no longer needed */
+.landing-container, .landing-intro, .landing-actions, .landing-branding {
+  /* This effectively removes the old styles by overriding them with defaults */
+  display: block;
+  text-align: left;
+  height: auto;
+  padding: 0;
+  color: inherit;
+  flex-direction: row;
+}
+.landing-branding h1, .landing-branding p {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  margin: inherit;
+  letter-spacing: inherit;
+}

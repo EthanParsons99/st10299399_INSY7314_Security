@@ -1,5 +1,3 @@
-// frontend/src/pages/DashboardPage.js
-
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import PaymentForm from '../components/PaymentForm';

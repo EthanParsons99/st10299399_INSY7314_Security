@@ -1,3 +1,5 @@
+// frontend/src/components/LoginForm.js
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -8,10 +10,8 @@ function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  // PROTECTION 1: Validate input on change (prevents XSS)
   const handleNameChange = (e) => {
     const value = e.target.value;
-    // Only allow alphanumeric and underscore
     if (/^[a-zA-Z0-9_]*$/.test(value)) {
       setName(value);
     }
@@ -21,7 +21,6 @@ function LoginForm() {
     setPassword(e.target.value);
   };
 
-  // PROTECTION 2: Clear sensitive data on component unmount
   useEffect(() => {
     return () => {
       setPassword('');
@@ -35,8 +34,7 @@ function LoginForm() {
     setIsLoading(true);
 
     try {
-      // Uses HTTPS
-      const apiUrl = process.env.REACT_APP_API_URL || 'https://localhost:3000';
+      const apiUrl = 'https://localhost:3000'; // Make sure this is HTTPS
       const response = await fetch(`${apiUrl}/user/login`, {
         method: 'POST',
         headers: {
@@ -44,17 +42,15 @@ function LoginForm() {
           'X-Requested-With': 'XMLHttpRequest'
         },
         credentials: 'include', 
-        body: JSON.stringify({ name, password }),
+        body: JSON.stringify({ name, password }), // Body only contains name and password
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // stores token in sessionStorage
         sessionStorage.setItem('token', data.token);
         sessionStorage.setItem('userName', data.name);
         
-        // Clears sensitive data
         setPassword('');
         setName('');
         
