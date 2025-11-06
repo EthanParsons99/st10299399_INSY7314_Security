@@ -143,34 +143,38 @@ jobs:
             echo "Starting HTTPS server on port 3000..."
             echo "Current directory: $(pwd)"
             
-            # Export environment variables explicitly
-            export ATLAS_URI="${ATLAS_URI}"
-            export JWT_SECRET="${JWT_SECRET}"
-            export EMPLOYEE_USERNAME="${EMPLOYEE_USERNAME}"
-            export EMPLOYEE_PASSWORD="${EMPLOYEE_PASSWORD}"
-            
-            # Verify they're set
-            echo "Environment variables exported:"
-            echo "ATLAS_URI: $(if [ -n "$ATLAS_URI" ]; then echo 'Set'; else echo 'NOT SET'; fi)"
-            echo "JWT_SECRET: $(if [ -n "$JWT_SECRET" ]; then echo 'Set'; else echo 'NOT SET'; fi)"
+            # Show first 20 chars of each env var to verify they're set (don't expose full values)
+            echo "Environment variables check:"
+            echo "ATLAS_URI: ${ATLAS_URI:0:20}..."
+            echo "JWT_SECRET: ${JWT_SECRET:0:20}..."
             echo "EMPLOYEE_USERNAME: $EMPLOYEE_USERNAME"
-            echo "EMPLOYEE_PASSWORD: $(if [ -n "$EMPLOYEE_PASSWORD" ]; then echo 'Set'; else echo 'NOT SET'; fi)"
+            echo "EMPLOYEE_PASSWORD: ${EMPLOYEE_PASSWORD:0:20}..."
             
-            # Start server and redirect output to a log file
+            # Start server with environment variables explicitly passed
+            ATLAS_URI="$ATLAS_URI" \
+            JWT_SECRET="$JWT_SECRET" \
+            EMPLOYEE_USERNAME="$EMPLOYEE_USERNAME" \
+            EMPLOYEE_PASSWORD="$EMPLOYEE_PASSWORD" \
             node server.mjs > /tmp/server.log 2>&1 &
+            
             SERVER_PID=$!
             echo "Server started with PID: $SERVER_PID"
             echo $SERVER_PID > /tmp/server.pid
             
             # Give it a moment to start
-            sleep 2
+            sleep 3
+            
+            # Show initial log output
+            echo "=== Initial Server Output ==="
+            head -n 20 /tmp/server.log
+            echo "============================="
             
             # Check if process is still alive
             if ps -p $SERVER_PID > /dev/null; then
               echo "✓ Server process is running"
             else
               echo "✗ Server process died immediately!"
-              echo "=== Server Log ==="
+              echo "=== Full Server Log ==="
               cat /tmp/server.log
               echo "=================="
               exit 1
