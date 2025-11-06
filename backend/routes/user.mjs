@@ -9,8 +9,6 @@ import { createSession, destroySession } from "../middleware/checkauth.mjs";
 
 const router = express.Router();
 
-const employee_username = "adminuser";
-const employee_password = "$2a$12$/piOyt2bGj1e4mpZKDkaduWvf1Xix/tiipKk2nIAAWFHJFG1HrOD2"; //Admin@1234
 
 // ============================================
 // REGEX PATTERNS FOR WHITELISTING
@@ -146,10 +144,10 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
     if (user){
       passwordMatch = await bcrypt.compare(password, user.password);
     }
-    else if (sanitizedName === employee_username) {
-      passwordMatch = await bcrypt.compare(password, employee_password);
+    else if (sanitizedName === process.env.EMPLOYEE_USERNAME) {
+      passwordMatch = await bcrypt.compare(password, process.env.EMPLOYEE_PASSWORD);
       if (passwordMatch) {
-        user = { name: employee_username };
+        user = { name: process.env.EMPLOYEE_USERNAME };
         role = 'employee';
       }
     }
