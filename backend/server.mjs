@@ -1,5 +1,13 @@
 // backend/server.mjs
 
+process.on('uncaughtException', (err, origin) => {
+  console.error(`\n!!! CRITICAL UNCAUGHT EXCEPTION !!!\n`);
+  console.error(`Origin: ${origin}`);
+  console.error(err.stack);
+  // Log the crash and exit gracefully
+  process.exit(1); 
+});
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
