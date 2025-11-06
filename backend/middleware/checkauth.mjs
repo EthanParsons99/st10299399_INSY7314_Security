@@ -4,6 +4,8 @@ import crypto from "crypto";
 
 // Session store to track active sessions 
 export const activeSessions = new Map();
+// Additional security: Account lockout after failed attempts
+export const loginAttempts = new Map();
 
 export default (req, res, next) => {
   try {
@@ -91,9 +93,50 @@ export function destroySession(sessionId) {
 }
 
 export const checkEmployeeRole = (req, res, next) => {
-  if (req.userData && req.userData.role === 'employee') {
-    next();
-  } else {
-    return res.status(403).json({ message: "Forbidden: Insufficient permissions." });
+  if (!req.userData) {
+    return res.status(401).json({ message: "Authentication required." });
   }
+  
+  if (req.userData.role !== 'employee') {
+    // Log suspicious access attempts
+    console.warn(`Unauthorized employee access attempt by: ${req.userData.name} (${req.userData.role})`);
+    return res.status(403).json({ message: "Forbidden: Employee access only." });
+  }
+  
+  next();
 };
+
+
+
+export function recordFailedLogin(identifier) {
+  const attempts = loginAttempts.get(identifier) || { count: 0, firstAttempt: Date.now() };
+  attempts.count++;
+  attempts.lastAttempt = Date.now();
+  
+  loginAttempts.set(identifier, attempts);
+  
+  // Clear after 15 minutes
+  setTimeout(() => {
+    loginAttempts.delete(identifier);
+  }, 15 * 60 * 1000);
+  
+  return attempts.count;
+}
+
+export function isAccountLocked(identifier) {
+  const attempts = loginAttempts.get(identifier);
+  if (!attempts) return false;
+  
+  // Lock after 5 failed attempts within 15 minutes
+  if (attempts.count >= 5) {
+    const timeSinceFirst = Date.now() - attempts.firstAttempt;
+    if (timeSinceFirst < 15 * 60 * 1000) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function clearLoginAttempts(identifier) {
+  loginAttempts.delete(identifier);
+}
