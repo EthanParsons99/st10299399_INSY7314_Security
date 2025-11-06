@@ -32,19 +32,19 @@ jobs:
           name: Install Employee Portal Dependencies
           command: npm install --prefix employee-portal
       
-      # Run the SonarCloud Analysis on the entire project
+      # 2. Run the SonarCloud Analysis
       - sonarcloud/scan:
-          # These values MUST match the Environment Variables you set in your CircleCI Project Settings
-          projectKey: $SONAR_PROJECT_KEY
-          token: $SONAR_TOKEN
-          organization: $SONAR_ORGANIZATION
-          # CORRECTION 2: Scan the whole project, not just the backend.
-          # We define what to include and exclude for a full-stack analysis.
-          args: |
-            -Dsonar.sources=backend,frontend/src,employee-portal/src
-            -Dsonar.tests=frontend/src,employee-portal/src
-            -Dsonar.test.inclusions=/.test.js,/.spec.js
-            -Dsonar.exclusions=node_modules/,/build/,/.spec.js,/.test.js
+          # Authentication will be AUTOMATICALLY picked up from the CircleCI Environment Variables:
+          # $SONAR_TOKEN, $SONAR_ORGANIZATION, $SONAR_PROJECT_KEY
+          # DO NOT pass them explicitly here.
+          
+          # Use the 'properties' parameter for custom Sonar Scanner arguments
+          properties: |
+            # Scan all relevant code directories
+            sonar.sources=backend,frontend/src,employee-portal/src
+            # Exclude node_modules, build folders, and test files from the main scan
+            sonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js
+            sonar.language=js
 
   # ---------------------------------------------
   # JOB 2: API Security Testing (This is an advanced, high-mark feature)
