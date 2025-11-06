@@ -18,26 +18,29 @@ jobs:
     steps:
       - checkout
       
-      # Install dependencies for ALL parts of the project.
+      # 1. Install dependencies for ALL parts of the project.
       - run:
-          name: Install Backend Dependencies
-          command: npm install --prefix backend
+          name: Install All Project Dependencies
+          command: |
+            npm install --prefix backend
+            npm install --prefix frontend
+            npm install --prefix employee-portal
+
+      # 2. Configure Sonar Scanner via a properties file.
+      # This is the most reliable method when the orb's arguments (args/properties) are unstable.
       - run:
-          name: Install Customer Portal Dependencies
-          command: npm install --prefix frontend
-      - run:
-          name: Install Employee Portal Dependencies
-          command: npm install --prefix employee-portal
+          name: Generate sonar-project.properties
+          command: |
+            echo "sonar.projectBaseDir=." > sonar-project.properties
+            echo "sonar.language=js" >> sonar-project.properties
+            echo "sonar.sources=backend,frontend/src,employee-portal/src" >> sonar-project.properties
+            # Exclude node_modules, build directories, and test/spec files from analysis
+            echo "sonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js" >> sonar-project.properties
       
-      # 2. Run the SonarCloud Analysis
-      - sonarcloud/scan:
-          # FIX: Reverting to 'properties' as 'args' is not recognized by this orb version (2.0.0).
-          # Using the block scalar >- to pass multi-line arguments correctly to the CLI.
-          properties: >-
-            -Dsonar.sources=backend,frontend/src,employee-portal/src
-            -Dsonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js
-            -Dsonar.language=js
-            -Dsonar.projectBaseDir=.
+      # 3. Run the SonarCloud Analysis
+      - sonarcloud/scan
+          # NOTE: No arguments are passed here. The orb will automatically detect and use
+          # the 'sonar-project.properties' file generated in the previous step.
 
   # ---------------------------------------------
   # JOB 2: API Security Testing
