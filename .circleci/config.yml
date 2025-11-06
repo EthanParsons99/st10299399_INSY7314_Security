@@ -1,15 +1,13 @@
-# .circleci/config.yml
-
 version: 2.1
 
 orbs:
-  node: circleci/node@5.2.0    # Using a slightly newer version of the orb
+  node: circleci/node@5.2.0
   sonarcloud: sonarsource/sonarcloud@2.0.0
 
 executors:
   node-executor:
     docker:
-      - image: cimg/node:20.12 # Using a stable LTS Node.js version
+      - image: cimg/node:20.12
 
 jobs:
   # ---------------------------------------------
@@ -34,20 +32,18 @@ jobs:
       
       # 2. Run the SonarCloud Analysis
       - sonarcloud/scan:
-          # Authentication will be AUTOMATICALLY picked up from the CircleCI Environment Variables:
-          # $SONAR_TOKEN, $SONAR_ORGANIZATION, $SONAR_PROJECT_KEY
-          # DO NOT pass them explicitly here.
-          
-          # Use the 'properties' parameter for custom Sonar Scanner arguments
-          properties: |
-            # Scan all relevant code directories
-            sonar.sources=backend,frontend/src,employee-portal/src
-            # Exclude node_modules, build folders, and test files from the main scan
-            sonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js
-            sonar.language=js
+          # CORRECTION 2: The 'properties' parameter is not supported.
+          # We must use 'args' and prefix the properties with -D, 
+          # which directly passes them to the Sonar Scanner CLI.
+          args: |
+            -Dsonar.sources=backend,frontend/src,employee-portal/src
+            -Dsonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js
+            -Dsonar.language=js
+            # Add this to help the scanner find files across the monorepo structure
+            -Dsonar.projectBaseDir=.
 
   # ---------------------------------------------
-  # JOB 2: API Security Testing (This is an advanced, high-mark feature)
+  # JOB 2: API Security Testing
   # ---------------------------------------------
   api_test:
     executor: node-executor
@@ -66,6 +62,7 @@ jobs:
             cd backend
             # Note: For this to work, you MUST add ATLAS_URI, JWT_SECRET, EMPLOYEE_USERNAME,
             # and EMPLOYEE_PASSWORD as Environment Variables in your CircleCI Project Settings.
+            # Using npm start if package.json has a start script, or node server.mjs
             node server.mjs &
           background: true
           
@@ -82,7 +79,8 @@ jobs:
             LOGIN_URL="https://localhost:3000/user/login"
             
             # Attempt login 6 times (your rate limit is 5)
-            for i in {1..6}; do
+            # Use 'for i in $(seq 1 6); do' for better cross-shell compatibility in CircleCI
+            for i in $(seq 1 6); do
               STATUS_CODE=$(curl --insecure -s -o /dev/null -w "%{http_code}" $LOGIN_URL -H "Content-Type: application/json" -d "$LOGIN_DATA")
               echo "Attempt $i: Status Code $STATUS_CODE"
               if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then
