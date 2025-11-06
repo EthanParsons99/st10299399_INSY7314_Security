@@ -14,7 +14,7 @@ import checkAuth, {
 
 const router = express.Router();
 
-// Employee login with username
+// Employee login with username (using environment variables)
 router.post("/login", async (req, res) => {
   try {
     let { name, password } = req.body;
@@ -35,24 +35,24 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // Fetch employee from database
-    const collection = db.collection("employees");
-    const employee = await collection.findOne({ name });
+    // Check against environment variable credentials
+    const envUsername = process.env.EMPLOYEE_USERNAME;
+    const envPasswordHash = process.env.EMPLOYEE_PASSWORD;
 
-    if (!employee) {
+    if (!envUsername || !envPasswordHash) {
+      console.error("Employee credentials not configured in environment variables");
+      return res.status(500).json({ message: "Server configuration error." });
+    }
+
+    // Check if username matches
+    if (name !== envUsername) {
       recordFailedLogin(name);
       // Don't reveal whether username exists
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
-    // Verify employee role
-    if (employee.role !== 'employee') {
-      console.warn(`Non-employee attempted employee login: ${name}`);
-      return res.status(403).json({ message: "Access denied. Employee credentials required." });
-    }
-
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, employee.password);
+    // Verify password against the hashed password in .env
+    const isPasswordValid = await bcrypt.compare(password, envPasswordHash);
 
     if (!isPasswordValid) {
       const attemptCount = recordFailedLogin(name);
@@ -69,12 +69,12 @@ router.post("/login", async (req, res) => {
       || req.connection.remoteAddress;
 
     // Create session first to get sessionId
-    const sessionId = createSession(clientIp, employee.name, '', 'employee');
+    const sessionId = createSession(clientIp, name, '', 'employee');
 
     // Create JWT token with sessionId
     const token = jwt.sign(
       { 
-        name: employee.name,
+        name: name,
         role: 'employee',
         sessionId
       },
@@ -89,12 +89,12 @@ router.post("/login", async (req, res) => {
       session.token = token;
     }
 
-    console.log(`✓ Employee login successful: ${employee.name}`);
+    console.log(`✓ Employee login successful: ${name}`);
 
     res.status(200).json({
       token,
       user: {
-        name: employee.name,
+        name: name,
         role: 'employee'
       }
     });
@@ -108,7 +108,6 @@ router.post("/login", async (req, res) => {
 // Employee logout
 router.post("/logout", checkAuth, checkEmployeeRole, (req, res) => {
   destroySession(req.userData.sessionId);
-  sessionStorage.clear();
   res.status(200).json({ message: "Logged out successfully." });
 });
 
