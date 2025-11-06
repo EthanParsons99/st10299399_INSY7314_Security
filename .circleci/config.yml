@@ -31,13 +31,12 @@ jobs:
       
       # 2. Run the SonarCloud Analysis
       - sonarcloud/scan:
-          # FIX: The correct parameter is 'args', not 'extra_args' or 'properties'.
-          # We use the block scalar '|' to pass multiline arguments correctly.
-          args: |
+          # FIX: Reverting to 'properties' as 'args' is not recognized by this orb version (2.0.0).
+          # Using the block scalar >- to pass multi-line arguments correctly to the CLI.
+          properties: >-
             -Dsonar.sources=backend,frontend/src,employee-portal/src
             -Dsonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js
             -Dsonar.language=js
-            # Add this to help the scanner find files across the monorepo structure
             -Dsonar.projectBaseDir=.
 
   # ---------------------------------------------
@@ -76,7 +75,6 @@ jobs:
             LOGIN_URL="https://localhost:3000/user/login"
             
             # Attempt login 6 times (your rate limit is 5)
-            # Use 'for i in $(seq 1 6); do' for better cross-shell compatibility in CircleCI
             for i in $(seq 1 6); do
               STATUS_CODE=$(curl --insecure -s -o /dev/null -w "%{http_code}" $LOGIN_URL -H "Content-Type: application/json" -d "$LOGIN_DATA")
               echo "Attempt $i: Status Code $STATUS_CODE"
