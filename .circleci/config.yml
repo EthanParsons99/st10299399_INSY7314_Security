@@ -1,16 +1,13 @@
-# .circleci/config.yml
-
 version: 2.1
 
-# Use the official SonarSource orb and a modern Node orb
 orbs:
   node: circleci/node@5.2.0
-  sonarcloud: sonarsource/sonarcloud@2.0.0 
+  sonarcloud: sonarsource/sonarcloud@2.0.0
 
 executors:
   node-executor:
     docker:
-      - image: cimg/node:20.12 # Using a stable LTS Node.js version
+      - image: cimg/node:20.12
 
 jobs:
   # ---------------------------------------------
@@ -21,24 +18,27 @@ jobs:
     steps:
       - checkout
       
-      # Install dependencies for all parts of the project
+      # Install dependencies for ALL parts of the project.
       - run:
-          name: Install All Project Dependencies
-          command: |
-            npm install --prefix backend
-            npm install --prefix frontend
-            npm install --prefix employee-portal
+          name: Install Backend Dependencies
+          command: npm install --prefix backend
+      - run:
+          name: Install Customer Portal Dependencies
+          command: npm install --prefix frontend
+      - run:
+          name: Install Employee Portal Dependencies
+          command: npm install --prefix employee-portal
       
-      # Run the SonarCloud Analysis
+      # 2. Run the SonarCloud Analysis
       - sonarcloud/scan:
-          # --- SYNTAX CORRECTION ---
-          # The 'properties' parameter is deprecated. The new, correct parameter is 'extra_args'.
-          # We are passing the same sonar properties, just using the new syntax.
-          extra_args: >-
+          # FIX: The correct parameter is 'args', not 'extra_args' or 'properties'.
+          # We use the block scalar '|' to pass multiline arguments correctly.
+          args: |
             -Dsonar.sources=backend,frontend/src,employee-portal/src
-            -Dsonar.tests=frontend/src,employee-portal/src
-            -Dsonar.test.inclusions=/.test.js,/.spec.js
-            -Dsonar.exclusions=/node_modules/,/build/,/coverage/,/.spec.js,/.test.js
+            -Dsonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js
+            -Dsonar.language=js
+            # Add this to help the scanner find files across the monorepo structure
+            -Dsonar.projectBaseDir=.
 
   # ---------------------------------------------
   # JOB 2: API Security Testing
@@ -48,26 +48,26 @@ jobs:
     steps:
       - checkout
       
-      # Install backend dependencies
+      # Install dependencies only for the backend, as we are only testing the API
       - run:
           name: Install Backend Dependencies
           command: npm install --prefix backend
       
-      # Start the backend server
+      # Start the backend server in the background
       - run:
           name: Start Backend Server
           command: |
             cd backend
-            # Note: This job requires ATLAS_URI, JWT_SECRET, EMPLOYEE_USERNAME,
-            # and EMPLOYEE_PASSWORD to be set as CircleCI Environment Variables.
+            # Note: For this to work, you MUST add ATLAS_URI, JWT_SECRET, EMPLOYEE_USERNAME,
+            # and EMPLOYEE_PASSWORD as Environment Variables in your CircleCI Project Settings.
             node server.mjs &
           background: true
           
       - run: 
           name: Wait for Server to Start
-          command: sleep 15
+          command: sleep 15 # Give server time to initialize
       
-      # Test 1: Rate Limiter
+      # Test 1: Rate Limiter (Brute-Force/DDoS Protection)
       - run:
           name: Test Login Rate Limiter (Expecting 6th attempt to fail with 429)
           command: |
@@ -75,7 +75,9 @@ jobs:
             LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
             LOGIN_URL="https://localhost:3000/user/login"
             
-            for i in {1..6}; do
+            # Attempt login 6 times (your rate limit is 5)
+            # Use 'for i in $(seq 1 6); do' for better cross-shell compatibility in CircleCI
+            for i in $(seq 1 6); do
               STATUS_CODE=$(curl --insecure -s -o /dev/null -w "%{http_code}" $LOGIN_URL -H "Content-Type: application/json" -d "$LOGIN_DATA")
               echo "Attempt $i: Status Code $STATUS_CODE"
               if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then
@@ -85,7 +87,7 @@ jobs:
             done
             echo "SUCCESS: Rate limiter passed."
           
-      # Test 2: Employee Endpoint Authorization
+      # Test 2: Employee Endpoint Authorization (Role-Based Access Control)
       - run:
           name: Test Employee Endpoint Authorization (Unauthenticated)
           command: |
@@ -98,7 +100,7 @@ jobs:
             echo "SUCCESS: Employee endpoint correctly denies unauthorized access."
             
 # ---------------------------------------------
-# WORKFLOWS
+# WORKFLOWS: Define the order of jobs
 # ---------------------------------------------
 workflows:
   build-and-test:
