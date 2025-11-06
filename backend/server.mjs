@@ -1,5 +1,6 @@
 // backend/server.mjs
 
+// Import route handlers
 import posts from "./routes/post.mjs";
 import users from "./routes/user.mjs";
 import employees from "./routes/employee.mjs";
@@ -15,6 +16,7 @@ dotenv.config();
 const PORT = process.env.PORT || 3000;
 const app = express();
 
+// Middleware
 app.use(helmet({
   frameguard: { action: 'deny' },
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
@@ -40,7 +42,7 @@ const corsOptions = {
     'http://127.0.0.1:3001',
     'https://127.0.0.1:3001',
     
-    // Employee Portal Ports (NEW)
+    // Employee Portal Ports
     'http://localhost:3002',
     'https://localhost:3002',
     'http://127.0.0.1:3002',
@@ -55,10 +57,13 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
+
+// Apply CORS middleware
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ limit: '10kb', extended: false }));
 
+// Additional security headers
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');

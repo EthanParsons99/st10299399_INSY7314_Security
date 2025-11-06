@@ -7,7 +7,7 @@ import checkauth, { checkEmployeeRole } from "../middleware/checkauth.mjs";
 
 const router = express.Router();
 
-// ROUTE 1: GET ALL PENDING PAYMENTS (This should already exist and be working)
+// ROUTE 1: FETCH PENDING PAYMENTS
 router.get("/payments", checkauth, checkEmployeeRole, async (req, res) => {
   try {
     const collection = db.collection("payments");
@@ -20,10 +20,9 @@ router.get("/payments", checkauth, checkEmployeeRole, async (req, res) => {
 });
 
 
-// --- NEW CODE START ---
 
 // ROUTE 2: UPDATE A PAYMENT'S STATUS (APPROVE/REJECT)
-// This is the endpoint that handles the button clicks.
+// This is the endpoint that handles the button clicks from the employee dashboard
 router.patch("/payments/:id", checkauth, checkEmployeeRole, async (req, res) => {
   try {
     const { id } = req.params;
@@ -63,8 +62,6 @@ router.patch("/payments/:id", checkauth, checkEmployeeRole, async (req, res) => 
     res.status(500).json({ message: "Failed to update payment status." });
   }
 });
-
-// --- NEW CODE END ---
 
 
 export default router;
