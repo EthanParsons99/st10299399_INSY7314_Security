@@ -127,11 +127,14 @@ const generalEmployeeLimiter = rateLimit({
 // STEP 7: Custom Input Sanitization
 // ============================================
 const sanitizeEmployeeInput = (req, res, next) => {
-  if (req.body.email) {
-    req.body.email = validator.normalizeEmail(req.body.email);
-  }
-  if (req.body.name) {
-    req.body.name = validator.escape(req.body.name);
+  // Only sanitize if req.body exists and has the properties
+  if (req.body) {
+    if (req.body.email) {
+      req.body.email = validator.normalizeEmail(req.body.email);
+    }
+    if (req.body.name) {
+      req.body.name = validator.escape(req.body.name);
+    }
   }
   next();
 };

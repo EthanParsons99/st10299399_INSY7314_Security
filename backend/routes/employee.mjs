@@ -105,6 +105,111 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// Get all payments/transactions (Protected route)
+router.get("/payments", checkAuth, checkEmployeeRole, async (req, res) => {
+  try {
+    console.log(`✓ Employee ${req.userData.name} accessing payments`);
+    
+    const collection = db.collection("payments");
+    const payments = await collection.find({}).sort({ createdAt: -1 }).toArray();
+    
+    console.log(`✓ Found ${payments.length} payment records`);
+    
+    // Return just the array
+    res.status(200).json(payments);
+
+  } catch (error) {
+    console.error("Error fetching payments:", error);
+    res.status(500).json({ 
+      message: "Failed to fetch payments",
+      error: error.message 
+    });
+  }
+});
+// Get payment by ID (Protected route)
+router.get("/payments/:id", checkAuth, checkEmployeeRole, async (req, res) => {
+  try {
+    const { ObjectId } = await import("mongodb");
+    const collection = db.collection("payments");
+    
+    const payment = await collection.findOne({ 
+      _id: new ObjectId(req.params.id) 
+    });
+
+    if (!payment) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Payment not found" 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      payment: payment
+    });
+
+  } catch (error) {
+    console.error("Error fetching payment:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch payment",
+      error: error.message 
+    });
+  }
+});
+// Update payment status - Approve or Reject (Protected route)
+router.patch("/payments/:id", checkAuth, checkEmployeeRole, async (req, res) => {
+  try {
+    const { ObjectId } = await import("mongodb");
+    const { status } = req.body;
+    
+    // Validate status
+    if (!status || !['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Invalid status. Must be 'approved' or 'rejected'" 
+      });
+    }
+
+    const collection = db.collection("payments");
+    
+    // Update the payment with new status and processing info
+    const result = await collection.updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { 
+        $set: { 
+          status: status,
+          processedBy: req.userData.name,
+          processedAt: new Date()
+        } 
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Payment not found" 
+      });
+    }
+
+    console.log(`✓ Payment ${req.params.id} ${status} by ${req.userData.name}`);
+
+    res.status(200).json({
+      success: true,
+      message: `Payment ${status} successfully`,
+      paymentId: req.params.id,
+      status: status
+    });
+
+  } catch (error) {
+    console.error("Error updating payment status:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to update payment status",
+      error: error.message 
+    });
+  }
+});
 // Employee logout
 router.post("/logout", checkAuth, checkEmployeeRole, (req, res) => {
   destroySession(req.userData.sessionId);
