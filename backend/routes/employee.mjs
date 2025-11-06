@@ -14,7 +14,7 @@ import checkAuth, {
 
 const router = express.Router();
 
-// Employee login with username (using environment variables)
+// Employee login with username 
 router.post("/login", async (req, res) => {
   try {
     let { name, password } = req.body;
@@ -79,7 +79,7 @@ router.post("/login", async (req, res) => {
         sessionId
       },
       process.env.JWT_SECRET,
-      { expiresIn: "2h" } // Shorter expiration for employees
+      { expiresIn: "2h" } 
     );
 
     // Update session with final token
@@ -105,7 +105,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// Get all payments/transactions (Protected route)
+// Get all payments/transactions 
 router.get("/payments", checkAuth, checkEmployeeRole, async (req, res) => {
   try {
     console.log(`✓ Employee ${req.userData.name} accessing payments`);
@@ -126,7 +126,7 @@ router.get("/payments", checkAuth, checkEmployeeRole, async (req, res) => {
     });
   }
 });
-// Get payment by ID (Protected route)
+// Get payment by ID
 router.get("/payments/:id", checkAuth, checkEmployeeRole, async (req, res) => {
   try {
     const { ObjectId } = await import("mongodb");
@@ -157,7 +157,7 @@ router.get("/payments/:id", checkAuth, checkEmployeeRole, async (req, res) => {
     });
   }
 });
-// Update payment status - Approve or Reject (Protected route)
+// Update payment status  Approve or Reject 
 router.patch("/payments/:id", checkAuth, checkEmployeeRole, async (req, res) => {
   try {
     const { ObjectId } = await import("mongodb");

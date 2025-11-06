@@ -1,12 +1,10 @@
 // backend/middleware/checkauth.mjs
 import jwt from "jsonwebtoken";
-// 🚨 CRITICAL FIX: Replaced synchronous crypto.randomUUID() with async/hex approach 
-// to prevent silent crashes in CI environments during route import.
 import crypto from "crypto";
 
 // Session store to track active sessions 
 export const activeSessions = new Map();
-// Additional security: Account lockout after failed attempts
+// For Account lockout after failed attempts
 export const loginAttempts = new Map();
 
 export default (req, res, next) => {
@@ -33,21 +31,15 @@ export default (req, res, next) => {
 
     const sessionData = activeSessions.get(sessionId);
 
-    // Verify the token matches what we stored (security check)
+    // Verify the token matches what we stored
     if (sessionData.token !== token) {
       console.warn('Token mismatch for session:', sessionId);
       return res.status(401).json({ message: "Session invalid or expired." });
     }
 
-    // Verify IP hasn't changed (prevents session jacking)
+    // Verify IP hasn't changed (for session jacking prevention)
     const storedIp = sessionData.ip;
     const currentIp = req.ip || req.connection.remoteAddress;
-    
-    // FIX: CircleCI uses internal IP addresses for localhost connections. 
-    // We must relax this IP check for 127.0.0.1 in the CI environment ONLY
-    // by ensuring that the comparison only happens if we are NOT in the CI environment 
-    // or if the IP is not a known localhost variant.
-    
     const isLocalhost = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(currentIp) && 
                         ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(storedIp);
 
@@ -83,7 +75,7 @@ export function createSession(ip, userName, token, role = 'customer') {
   // Use crypto.randomBytes for robust, cross-platform session ID generation
   const sessionId = crypto.randomBytes(16).toString('hex');
   
-  // Store the token as well (for verification)
+  // Store the token as well 
   activeSessions.set(sessionId, { 
     ip, 
     userName, 

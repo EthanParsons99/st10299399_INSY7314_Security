@@ -15,14 +15,14 @@ function EmployeeLoginForm() {
     setMessage('');
     setIsLoading(true);
 
-    // Client-side validation
+    // Client side validation
     if (!name || !password) {
       setMessage('Please fill in all fields');
       setIsLoading(false);
       return;
     }
 
-    // Sanitize username (remove extra spaces, prevent script injection)
+    // Sanitize username and removed white spaces, this helps with basic XSS prevention
     const sanitizedName = name.trim().replace(/[<>]/g, '');
 
     try {
