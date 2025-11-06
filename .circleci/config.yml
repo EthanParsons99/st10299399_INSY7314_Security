@@ -30,7 +30,6 @@ jobs:
           command: npm install --prefix employee-portal
 
       # 2. Configure Sonar Scanner via a properties file.
-      # FIX: Added sonar.projectKey and sonar.organization, which were mandatory and missing.
       - run:
           name: Generate sonar-project.properties
           command: |
@@ -43,8 +42,6 @@ jobs:
       
       # 3. Run the SonarCloud Analysis
       - sonarcloud/scan
-          # NOTE: No arguments are passed here. The orb will automatically detect and use
-          # the 'sonar-project.properties' file generated in the previous step.
 
   # ---------------------------------------------
   # JOB 2: API Security Testing
@@ -54,48 +51,72 @@ jobs:
     steps:
       - checkout
       
-      # Install dependencies only for the backend, as we are only testing the API
+      # Install dependencies only for the backend
       - run:
           name: Install Backend Dependencies
           command: npm install --prefix backend
       
-      # Start the backend server in the background
+      # Start the backend server in the background with logging
       - run:
           name: Start Backend Server
           command: |
             cd backend
-            # Note: For this to work, you MUST add ATLAS_URI, JWT_SECRET, EMPLOYEE_USERNAME,
-            # and EMPLOYEE_PASSWORD as Environment Variables in your CircleCI Project Settings.
-            # Using npm start if package.json has a start script, or node server.mjs
-            node server.mjs &
+            echo "Starting server with environment variables..."
+            echo "ATLAS_URI is set: $(if [ -n "$ATLAS_URI" ]; then echo 'YES'; else echo 'NO'; fi)"
+            echo "JWT_SECRET is set: $(if [ -n "$JWT_SECRET" ]; then echo 'YES'; else echo 'NO'; fi)"
+            echo "EMPLOYEE_USERNAME: $EMPLOYEE_USERNAME"
+            
+            # Start server and redirect output to a log file
+            node server.mjs > /tmp/server.log 2>&1 &
+            SERVER_PID=$!
+            echo "Server started with PID: $SERVER_PID"
+            echo $SERVER_PID > /tmp/server.pid
           background: true
           
-      # 🚨 FIX: Replaced 'sleep 15' with a robust polling loop. 🚨
+      # Wait for server with better logging
       - run:
           name: Wait for Server to Be Accessible
           command: |
-            # Use 127.0.0.1 for reliable container networking
             SERVER_URL="https://127.0.0.1:3000"
-            MAX_ATTEMPTS=10
+            MAX_ATTEMPTS=15
             ATTEMPT=1
             
             echo "Waiting for backend server at $SERVER_URL to start..."
             
+            # Give server a moment to start up
+            sleep 5
+            
             while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-              # curl -s (silent), -k (insecure/skip cert), -f (fail fast on HTTP error)
-              # Check if the connection succeeds (status code 000 is for connection success)
-              if curl -skf --head $SERVER_URL; then
-                echo "Server is UP and responsive after $ATTEMPT attempts."
-                exit 0 # Success
+              echo "Attempt $ATTEMPT of $MAX_ATTEMPTS..."
+              
+              # Check if server process is still running
+              if [ -f /tmp/server.pid ]; then
+                SERVER_PID=$(cat /tmp/server.pid)
+                if ! ps -p $SERVER_PID > /dev/null 2>&1; then
+                  echo "ERROR: Server process died!"
+                  echo "=== Server Log ==="
+                  cat /tmp/server.log
+                  echo "=================="
+                  exit 1
+                fi
               fi
               
-              echo "Attempt $ATTEMPT of $MAX_ATTEMPTS failed. Sleeping for 3 seconds..."
+              # Try to connect to server
+              if curl -skf --connect-timeout 5 --max-time 10 $SERVER_URL > /dev/null 2>&1; then
+                echo "✓ Server is UP and responsive after $ATTEMPT attempts."
+                exit 0
+              fi
+              
+              echo "Server not ready yet. Sleeping for 3 seconds..."
               sleep 3
               ATTEMPT=$((ATTEMPT + 1))
             done
             
             echo "FAIL: Server did not become responsive after $MAX_ATTEMPTS attempts."
-            exit 1 # Failure
+            echo "=== Server Log ==="
+            cat /tmp/server.log
+            echo "=================="
+            exit 1
       
       # Test 1: Rate Limiter (Brute-Force/DDoS Protection)
       - run:
@@ -103,11 +124,8 @@ jobs:
           command: |
             echo "--- Testing Rate Limiter ---"
             LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
-            # FIX: Change localhost to 127.0.0.1 for reliable connectivity inside the Docker container
             LOGIN_URL="https://127.0.0.1:3000/user/login"
             
-            # Attempt login 6 times (your rate limit is 5)
-            # Use 'for i in $(seq 1 6); do' for better cross-shell compatibility in CircleCI
             for i in $(seq 1 6); do
               STATUS_CODE=$(curl --insecure -s -o /dev/null -w "%{http_code}" $LOGIN_URL -H "Content-Type: application/json" -d "$LOGIN_DATA")
               echo "Attempt $i: Status Code $STATUS_CODE"
@@ -122,7 +140,6 @@ jobs:
       - run:
           name: Test Employee Endpoint Authorization (Unauthenticated)
           command: |
-            # FIX: Change localhost to 127.0.0.1 for reliable connectivity inside the Docker container
             EMPLOYEE_URL="https://127.0.0.1:3000/employee/payments"
             UNAUTH_STATUS=$(curl --insecure -s -o /dev/null -w "%{http_code}" $EMPLOYEE_URL)
             if [ "$UNAUTH_STATUS" -ne 401 ]; then
@@ -130,6 +147,15 @@ jobs:
               exit 1
             fi
             echo "SUCCESS: Employee endpoint correctly denies unauthorized access."
+      
+      # Cleanup: Show server logs if tests fail
+      - run:
+          name: Show Server Logs on Failure
+          command: |
+            echo "=== Final Server Log ==="
+            cat /tmp/server.log
+            echo "======================="
+          when: on_fail
             
 # ---------------------------------------------
 # WORKFLOWS: Define the order of jobs
