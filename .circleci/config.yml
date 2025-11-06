@@ -18,7 +18,8 @@ jobs:
     steps:
       - checkout
       
-      # 1. Install dependencies for ALL parts of the project.
+      # CORRECTION 1: Install dependencies for ALL parts of the project.
+      # This is crucial for a complete and accurate scan.
       - run:
           name: Install Backend Dependencies
           command: npm install --prefix backend
@@ -28,23 +29,18 @@ jobs:
       - run:
           name: Install Employee Portal Dependencies
           command: npm install --prefix employee-portal
-
-      # 2. Configure Sonar Scanner via a properties file.
-      # FIX: Added sonar.projectKey and sonar.organization, which were mandatory and missing.
-      - run:
-          name: Generate sonar-project.properties
-          command: |
-            echo "sonar.projectBaseDir=." > sonar-project.properties
-            echo "sonar.projectKey=EthanParsons99_st10299399_INSY7314_Security" >> sonar-project.properties
-            echo "sonar.organization=ethanparsons99" >> sonar-project.properties
-            echo "sonar.language=js" >> sonar-project.properties
-            echo "sonar.sources=backend,frontend/src,employee-portal/src" >> sonar-project.properties
-            echo "sonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js" >> sonar-project.properties
       
-      # 3. Run the SonarCloud Analysis
-      - sonarcloud/scan
-          # NOTE: No arguments are passed here. The orb will automatically detect and use
-          # the 'sonar-project.properties' file generated in the previous step.
+      # 2. Run the SonarCloud Analysis
+      - sonarcloud/scan:
+          # CORRECTION 2: The 'properties' parameter is not supported.
+          # We must use 'args' and prefix the properties with -D, 
+          # which directly passes them to the Sonar Scanner CLI.
+          args: |
+            -Dsonar.sources=backend,frontend/src,employee-portal/src
+            -Dsonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js
+            -Dsonar.language=js
+            # Add this to help the scanner find files across the monorepo structure
+            -Dsonar.projectBaseDir=.
 
   # ---------------------------------------------
   # JOB 2: API Security Testing
@@ -70,13 +66,14 @@ jobs:
             node server.mjs &
           background: true
           
-      # 🚨 FIX: Replaced 'sleep 15' with a robust polling loop. 🚨
+      # 🚨 FIX: Increased polling attempts to handle slow external MongoDB Atlas connection. 🚨
       - run:
           name: Wait for Server to Be Accessible
           command: |
             # Use 127.0.0.1 for reliable container networking
             SERVER_URL="https://127.0.0.1:3000"
-            MAX_ATTEMPTS=10
+            # Increased max attempts to 20 (3s sleep * 20 attempts = 60s total max wait)
+            MAX_ATTEMPTS=20 
             ATTEMPT=1
             
             echo "Waiting for backend server at $SERVER_URL to start..."
@@ -103,7 +100,7 @@ jobs:
           command: |
             echo "--- Testing Rate Limiter ---"
             LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
-            # FIX: Change localhost to 127.0.0.1 for reliable connectivity inside the Docker container
+            # Change localhost to 127.0.0.1 for reliable connectivity inside the Docker container
             LOGIN_URL="https://127.0.0.1:3000/user/login"
             
             # Attempt login 6 times (your rate limit is 5)
@@ -122,7 +119,7 @@ jobs:
       - run:
           name: Test Employee Endpoint Authorization (Unauthenticated)
           command: |
-            # FIX: Change localhost to 127.0.0.1 for reliable connectivity inside the Docker container
+            # Change localhost to 127.0.0.1 for reliable connectivity inside the Docker container
             EMPLOYEE_URL="https://127.0.0.1:3000/employee/payments"
             UNAUTH_STATUS=$(curl --insecure -s -o /dev/null -w "%{http_code}" $EMPLOYEE_URL)
             if [ "$UNAUTH_STATUS" -ne 401 ]; then
