@@ -143,6 +143,19 @@ jobs:
             echo "Starting HTTPS server on port 3000..."
             echo "Current directory: $(pwd)"
             
+            # Export environment variables explicitly
+            export ATLAS_URI="${ATLAS_URI}"
+            export JWT_SECRET="${JWT_SECRET}"
+            export EMPLOYEE_USERNAME="${EMPLOYEE_USERNAME}"
+            export EMPLOYEE_PASSWORD="${EMPLOYEE_PASSWORD}"
+            
+            # Verify they're set
+            echo "Environment variables exported:"
+            echo "ATLAS_URI: $(if [ -n "$ATLAS_URI" ]; then echo 'Set'; else echo 'NOT SET'; fi)"
+            echo "JWT_SECRET: $(if [ -n "$JWT_SECRET" ]; then echo 'Set'; else echo 'NOT SET'; fi)"
+            echo "EMPLOYEE_USERNAME: $EMPLOYEE_USERNAME"
+            echo "EMPLOYEE_PASSWORD: $(if [ -n "$EMPLOYEE_PASSWORD" ]; then echo 'Set'; else echo 'NOT SET'; fi)"
+            
             # Start server and redirect output to a log file
             node server.mjs > /tmp/server.log 2>&1 &
             SERVER_PID=$!
