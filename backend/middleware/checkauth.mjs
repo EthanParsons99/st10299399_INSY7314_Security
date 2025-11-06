@@ -16,7 +16,7 @@ export default (req, res, next) => {
     // Verify token signature
     const decodedToken = jwt.verify(
       token, 
-      process.env.JWT_SECRET || "your_long_secret_key_change_this"
+      process.env.JWT_SECRET
     );
 
     const sessionId = decodedToken.sessionId;

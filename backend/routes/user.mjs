@@ -191,7 +191,7 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
     const expiresIn = 3600;
     const token = jwt.sign(
       { name: user.name, sessionId: sessionId, role: role },
-      process.env.JWT_SECRET || "your_long_secret_key_change_this",
+      process.env.JWT_SECRET,
       { expiresIn }
     );
 
