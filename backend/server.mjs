@@ -1,9 +1,4 @@
 // backend/server.mjs
-
-// Import route handlers
-import posts from "./routes/post.mjs";
-import users from "./routes/user.mjs";
-import employees from "./routes/employee.mjs";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -14,7 +9,24 @@ import rateLimit from 'express-rate-limit';
 import mongoSanitize from 'express-mongo-sanitize';
 import validator from 'validator';
 
+// Load environment variables FIRST
 dotenv.config();
+
+// Verify critical environment variables
+console.log('=== Environment Check ===');
+console.log('ATLAS_URI:', process.env.ATLAS_URI ? '✓ Set' : '✗ NOT SET');
+console.log('JWT_SECRET:', process.env.JWT_SECRET ? '✓ Set' : '✗ NOT SET');
+console.log('EMPLOYEE_USERNAME:', process.env.EMPLOYEE_USERNAME || '✗ NOT SET');
+console.log('EMPLOYEE_PASSWORD:', process.env.EMPLOYEE_PASSWORD ? '✓ Set' : '✗ NOT SET');
+console.log('========================');
+
+// Import route handlers (these may connect to DB)
+import posts from "./routes/post.mjs";
+import users from "./routes/user.mjs";
+import employees from "./routes/employee.mjs";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -154,8 +166,8 @@ app.use("/employee", employees);
 // STEP 9: HTTPS Server Setup
 // ============================================
 const options = {
-  key: fs.readFileSync('keys/privatekey.pem'),
-  cert: fs.readFileSync('keys/certificate.pem')
+  key: fs.readFileSync(keyPath),
+  cert: fs.readFileSync(certPath)
 };
 
 const server = https.createServer(options, app);
@@ -171,5 +183,16 @@ server.on('error', (err) => {
     console.error(`✗ Port ${PORT} is already in use!`);
     process.exit(1);
   }
-  throw err;
+  console.error('✗ Server error:', err);
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
 });

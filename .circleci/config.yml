@@ -18,8 +18,7 @@ jobs:
     steps:
       - checkout
       
-      # CORRECTION 1: Install dependencies for ALL parts of the project.
-      # This is crucial for a complete and accurate scan.
+      # 1. Install dependencies for ALL parts of the project.
       - run:
           name: Install Backend Dependencies
           command: npm install --prefix backend
@@ -29,18 +28,20 @@ jobs:
       - run:
           name: Install Employee Portal Dependencies
           command: npm install --prefix employee-portal
+
+      # 2. Configure Sonar Scanner via a properties file.
+      - run:
+          name: Generate sonar-project.properties
+          command: |
+            echo "sonar.projectBaseDir=." > sonar-project.properties
+            echo "sonar.projectKey=EthanParsons99_st10299399_INSY7314_Security" >> sonar-project.properties
+            echo "sonar.organization=ethanparsons99" >> sonar-project.properties
+            echo "sonar.language=js" >> sonar-project.properties
+            echo "sonar.sources=backend,frontend/src,employee-portal/src" >> sonar-project.properties
+            echo "sonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js" >> sonar-project.properties
       
-      # 2. Run the SonarCloud Analysis
-      - sonarcloud/scan:
-          # CORRECTION 2: The 'properties' parameter is not supported.
-          # We must use 'args' and prefix the properties with -D, 
-          # which directly passes them to the Sonar Scanner CLI.
-          args: |
-            -Dsonar.sources=backend,frontend/src,employee-portal/src
-            -Dsonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js
-            -Dsonar.language=js
-            # Add this to help the scanner find files across the monorepo structure
-            -Dsonar.projectBaseDir=.
+      # 3. Run the SonarCloud Analysis
+      - sonarcloud/scan
 
   # ---------------------------------------------
   # JOB 2: API Security Testing
@@ -50,49 +51,190 @@ jobs:
     steps:
       - checkout
       
-      # Install dependencies only for the backend, as we are only testing the API
+      # Verify project structure
+      - run:
+          name: Verify Project Structure
+          command: |
+            echo "=== Project Structure ==="
+            ls -la
+            echo ""
+            echo "=== Backend Directory ==="
+            ls -la backend/
+            echo ""
+            echo "=== Checking for keys folder ==="
+            if [ -d "backend/keys" ]; then
+              echo "✓ keys/ folder found"
+              ls -la backend/keys/
+            else
+              echo "✗ keys/ folder NOT FOUND!"
+              exit 1
+            fi
+            
+            echo ""
+            echo "=== Checking for required files ==="
+            if [ -f "backend/server.mjs" ]; then
+              echo "✓ server.mjs found"
+            else
+              echo "✗ server.mjs NOT FOUND!"
+              exit 1
+            fi
+            
+            if [ -f "backend/keys/certificate.pem" ]; then
+              echo "✓ certificate.pem found in keys/"
+            else
+              echo "✗ certificate.pem NOT FOUND in keys/!"
+              exit 1
+            fi
+            
+            if [ -f "backend/keys/privatekey.pem" ]; then
+              echo "✓ privatekey.pem found in keys/"
+            else
+              echo "✗ privatekey.pem NOT FOUND in keys/!"
+              exit 1
+            fi
+      
+      # Install dependencies only for the backend
       - run:
           name: Install Backend Dependencies
-          command: npm install --prefix backend
+          command: |
+            echo "Installing backend dependencies..."
+            npm install --prefix backend
+            echo "Dependencies installed successfully"
       
-      # Start the backend server in the background
+      # Verify environment variables
+      - run:
+          name: Verify Environment Variables
+          command: |
+            echo "=== Environment Variables Check ==="
+            if [ -z "$ATLAS_URI" ]; then
+              echo "✗ ATLAS_URI is NOT SET!"
+              exit 1
+            else
+              echo "✓ ATLAS_URI is set"
+            fi
+            
+            if [ -z "$JWT_SECRET" ]; then
+              echo "✗ JWT_SECRET is NOT SET!"
+              exit 1
+            else
+              echo "✓ JWT_SECRET is set"
+            fi
+            
+            if [ -z "$EMPLOYEE_USERNAME" ]; then
+              echo "✗ EMPLOYEE_USERNAME is NOT SET!"
+              exit 1
+            else
+              echo "✓ EMPLOYEE_USERNAME is set: $EMPLOYEE_USERNAME"
+            fi
+            
+            if [ -z "$EMPLOYEE_PASSWORD" ]; then
+              echo "✗ EMPLOYEE_PASSWORD is NOT SET!"
+              exit 1
+            else
+              echo "✓ EMPLOYEE_PASSWORD is set"
+            fi
+            echo "All environment variables are configured!"
+      
+      # Start the backend server in the background with logging
       - run:
           name: Start Backend Server
           command: |
             cd backend
-            # Note: For this to work, you MUST add ATLAS_URI, JWT_SECRET, EMPLOYEE_USERNAME,
-            # and EMPLOYEE_PASSWORD as Environment Variables in your CircleCI Project Settings.
-            # Using npm start if package.json has a start script, or node server.mjs
-            node server.mjs &
+            echo "Starting HTTPS server on port 3000..."
+            echo "Current directory: $(pwd)"
+            
+            # Show first 20 chars of each env var to verify they're set (don't expose full values)
+            echo "Environment variables check:"
+            echo "ATLAS_URI: ${ATLAS_URI:0:20}..."
+            echo "JWT_SECRET: ${JWT_SECRET:0:20}..."
+            echo "EMPLOYEE_USERNAME: $EMPLOYEE_USERNAME"
+            echo "EMPLOYEE_PASSWORD: ${EMPLOYEE_PASSWORD:0:20}..."
+            
+            # Start server with environment variables explicitly passed
+            ATLAS_URI="$ATLAS_URI" \
+            JWT_SECRET="$JWT_SECRET" \
+            EMPLOYEE_USERNAME="$EMPLOYEE_USERNAME" \
+            EMPLOYEE_PASSWORD="$EMPLOYEE_PASSWORD" \
+            node server.mjs > /tmp/server.log 2>&1 &
+            
+            SERVER_PID=$!
+            echo "Server started with PID: $SERVER_PID"
+            echo $SERVER_PID > /tmp/server.pid
+            
+            # Give it a moment to start
+            sleep 3
+            
+            # Show initial log output
+            echo "=== Initial Server Output ==="
+            head -n 20 /tmp/server.log
+            echo "============================="
+            
+            # Check if process is still alive
+            if ps -p $SERVER_PID > /dev/null; then
+              echo "✓ Server process is running"
+            else
+              echo "✗ Server process died immediately!"
+              echo "=== Full Server Log ==="
+              cat /tmp/server.log
+              echo "=================="
+              exit 1
+            fi
           background: true
           
-      # 🚨 FIX: Increased polling attempts to handle slow external MongoDB Atlas connection. 🚨
+      # Wait for server with better logging
       - run:
           name: Wait for Server to Be Accessible
           command: |
-            # Use 127.0.0.1 for reliable container networking
             SERVER_URL="https://127.0.0.1:3000"
-            # Increased max attempts to 20 (3s sleep * 20 attempts = 60s total max wait)
-            MAX_ATTEMPTS=20 
+            MAX_ATTEMPTS=20
             ATTEMPT=1
             
             echo "Waiting for backend server at $SERVER_URL to start..."
             
+            # Give server initial time to start up
+            sleep 5
+            
             while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-              # curl -s (silent), -k (insecure/skip cert), -f (fail fast on HTTP error)
-              # Check if the connection succeeds (status code 000 is for connection success)
-              if curl -skf --head $SERVER_URL; then
-                echo "Server is UP and responsive after $ATTEMPT attempts."
-                exit 0 # Success
+              echo "Attempt $ATTEMPT of $MAX_ATTEMPTS..."
+              
+              # Check if server process is still running
+              if [ -f /tmp/server.pid ]; then
+                SERVER_PID=$(cat /tmp/server.pid)
+                if ! ps -p $SERVER_PID > /dev/null 2>&1; then
+                  echo "ERROR: Server process died!"
+                  echo "=== Server Log ==="
+                  cat /tmp/server.log
+                  echo "=================="
+                  exit 1
+                fi
               fi
               
-              echo "Attempt $ATTEMPT of $MAX_ATTEMPTS failed. Sleeping for 3 seconds..."
+              # Show last few lines of log
+              if [ -f /tmp/server.log ]; then
+                echo "Latest log output:"
+                tail -n 5 /tmp/server.log
+              fi
+              
+              # Try to connect to server (checking root endpoint)
+              if curl -skf --connect-timeout 5 --max-time 10 "$SERVER_URL/" > /dev/null 2>&1; then
+                echo "✓ Server is UP and responsive after $ATTEMPT attempts!"
+                
+                # Test that we can actually reach the endpoint
+                RESPONSE=$(curl -sk "$SERVER_URL/")
+                echo "Server response: $RESPONSE"
+                exit 0
+              fi
+              
+              echo "Server not ready yet. Waiting 3 seconds..."
               sleep 3
               ATTEMPT=$((ATTEMPT + 1))
             done
             
             echo "FAIL: Server did not become responsive after $MAX_ATTEMPTS attempts."
-            exit 1 # Failure
+            echo "=== Full Server Log ==="
+            cat /tmp/server.log
+            echo "======================="
+            exit 1
       
       # Test 1: Rate Limiter (Brute-Force/DDoS Protection)
       - run:
@@ -100,33 +242,52 @@ jobs:
           command: |
             echo "--- Testing Rate Limiter ---"
             LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
-            # Change localhost to 127.0.0.1 for reliable connectivity inside the Docker container
             LOGIN_URL="https://127.0.0.1:3000/user/login"
             
-            # Attempt login 6 times (your rate limit is 5)
-            # Use 'for i in $(seq 1 6); do' for better cross-shell compatibility in CircleCI
             for i in $(seq 1 6); do
               STATUS_CODE=$(curl --insecure -s -o /dev/null -w "%{http_code}" $LOGIN_URL -H "Content-Type: application/json" -d "$LOGIN_DATA")
               echo "Attempt $i: Status Code $STATUS_CODE"
-              if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then
-                echo "FAIL: Rate limiter did not return 429 on 6th attempt. Got $STATUS_CODE."
-                exit 1
+              
+              # On the 6th attempt, we expect 429 (Too Many Requests)
+              if [ "$i" -eq 6 ]; then
+                if [ "$STATUS_CODE" -ne 429 ]; then
+                  echo "FAIL: Rate limiter did not return 429 on 6th attempt. Got $STATUS_CODE."
+                  exit 1
+                else
+                  echo "✓ Rate limiter correctly returned 429 on 6th attempt"
+                fi
               fi
             done
-            echo "SUCCESS: Rate limiter passed."
+            echo "SUCCESS: Rate limiter test passed!"
           
       # Test 2: Employee Endpoint Authorization (Role-Based Access Control)
       - run:
           name: Test Employee Endpoint Authorization (Unauthenticated)
           command: |
-            # Change localhost to 127.0.0.1 for reliable connectivity inside the Docker container
+            echo "--- Testing Employee Endpoint Authorization ---"
             EMPLOYEE_URL="https://127.0.0.1:3000/employee/payments"
             UNAUTH_STATUS=$(curl --insecure -s -o /dev/null -w "%{http_code}" $EMPLOYEE_URL)
+            
+            echo "Unauthenticated request status: $UNAUTH_STATUS"
+            
             if [ "$UNAUTH_STATUS" -ne 401 ]; then
               echo "FAIL: Unauthenticated access to $EMPLOYEE_URL returned $UNAUTH_STATUS (Expected 401)."
               exit 1
             fi
-            echo "SUCCESS: Employee endpoint correctly denies unauthorized access."
+            echo "SUCCESS: Employee endpoint correctly denies unauthorized access!"
+      
+      # Cleanup: Show server logs if tests fail
+      - run:
+          name: Show Server Logs on Failure
+          command: |
+            echo "=== Final Server Log ==="
+            if [ -f /tmp/server.log ]; then
+              cat /tmp/server.log
+            else
+              echo "No log file found"
+            fi
+            echo "======================="
+          when: on_fail
             
 # ---------------------------------------------
 # WORKFLOWS: Define the order of jobs
