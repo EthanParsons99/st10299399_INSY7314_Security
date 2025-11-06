@@ -76,7 +76,7 @@ jobs:
           command: |
             # Use 127.0.0.1 for reliable container networking
             SERVER_URL="https://127.0.0.1:3000"
-            MAX_ATTEMPTS=20
+            MAX_ATTEMPTS=10
             ATTEMPT=1
             
             echo "Waiting for backend server at $SERVER_URL to start..."
