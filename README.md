@@ -28,15 +28,36 @@ The project requires you to run dual server setup
 - Step 4: Install the dependencies by opening a terminal in visual studio code
 - Step 5: In the terminal enter: cd backend then "npm install --legacy-peer-deps"
 - Step 6: After the install is finished open another terminal and enter: cd frontend then "npm install"
-- Step 7: After the install is complete go back to the terminal which is in the backend and "npm run dev" to start the backend (It should say mongoDB is CONNECTED and Server is running on port:3000)
+- Step 6: After the install is finished open another terminal and enter: cd employee-portal then "npm install"
+- Step 7: After the installs is complete go back to the terminal which is in the backend and "npm run dev" to start the backend (It should say mongoDB is CONNECTED and Server is running on port:3000)
 - Step 8: Go back to the other terminal that is in the frontend and run "npm start" when the terminal prompts if it should open a new port enter Y
-- Step 9: It should launch a tab in your browser. Before trying to login open a new tab and navigate to https://localhost:3000
+- Step 8: Go back to the other terminal that is in the employee-portal and run "npm start" when the terminal prompts if it should open a new port enter Y
+- Step 9: It should launch a two tabs in your browser. One for customers and one for admins. Before trying to login open a new tab and navigate to https://localhost:3000
 - Step 10: When the browser displays the "Your connection is not private" warning, click "Advanced" or "Proceed to localhost" to accept the certificate
-- Step 11: Once accepted switch back to the frontend (e.g., https://localhost:3001/login). The API calls will now succeed and you will be able to test the system.
+- Step 11: Once accepted switch back to the frontend or employee-portal (e.g., https://localhost:3001/login). The API calls will now succeed and you will be able to test the system.
+- Step 12: If you reject or approve a payment to see the updated status on the customer side just refresh the page if you are already logged in
 
-  ## Login Information
+## Login Information
   - Username: testuser
   - Password: SecurePassword123
+## Admin Login
+  -  The admin is a seeded user and has no signup method
+  -  The login credentials for a admin was seeded in the .env file to make the application secure
+  -  The .env file is not on github but will be in the zip submitted
+  -  As well as a file that provides the login details inside the zip
+
+# User Functions
+## Customer
+- Able to login and signup to the system
+- Create and send payments
+- View payment statuses
+- Logout
+
+## Admin
+- Able to login as user is static and seeded
+- Able to view all incoming payments
+- Able to reject or approve these payments
+- Logout
 
  ## Database Setup
  - **User** -> name, password
