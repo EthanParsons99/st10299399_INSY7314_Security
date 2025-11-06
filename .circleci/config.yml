@@ -1,0 +1,117 @@
+# .circleci/config.yml
+
+version: 2.1
+
+orbs:
+  node: circleci/node@5.2.0    # Using a slightly newer version of the orb
+  sonarcloud: sonarcloud/sonarcloud@2.0.0 
+
+executors:
+  node-executor:
+    docker:
+      - image: cimg/node:20.12 # Using a stable LTS Node.js version
+
+jobs:
+  # ---------------------------------------------
+  # JOB 1: Static Code Analysis with SonarCloud
+  # ---------------------------------------------
+  sonar_scan:
+    executor: node-executor
+    steps:
+      - checkout
+      
+      # CORRECTION 1: Install dependencies for ALL parts of the project.
+      # This is crucial for a complete and accurate scan.
+      - run:
+          name: Install Backend Dependencies
+          command: npm install --prefix backend
+      - run:
+          name: Install Customer Portal Dependencies
+          command: npm install --prefix frontend
+      - run:
+          name: Install Employee Portal Dependencies
+          command: npm install --prefix employee-portal
+      
+      # Run the SonarCloud Analysis on the entire project
+      - sonarcloud/scan:
+          # These values MUST match the Environment Variables you set in your CircleCI Project Settings
+          projectKey: $SONAR_PROJECT_KEY
+          token: $SONAR_TOKEN
+          organization: $SONAR_ORGANIZATION
+          # CORRECTION 2: Scan the whole project, not just the backend.
+          # We define what to include and exclude for a full-stack analysis.
+          args: |
+            -Dsonar.sources=backend,frontend/src,employee-portal/src
+            -Dsonar.tests=frontend/src,employee-portal/src
+            -Dsonar.test.inclusions=/.test.js,/.spec.js
+            -Dsonar.exclusions=node_modules/,/build/,/.spec.js,/.test.js
+
+  # ---------------------------------------------
+  # JOB 2: API Security Testing (This is an advanced, high-mark feature)
+  # ---------------------------------------------
+  api_test:
+    executor: node-executor
+    steps:
+      - checkout
+      
+      # Install dependencies only for the backend, as we are only testing the API
+      - run:
+          name: Install Backend Dependencies
+          command: npm install --prefix backend
+      
+      # Start the backend server in the background
+      - run:
+          name: Start Backend Server
+          command: |
+            cd backend
+            # Note: For this to work, you MUST add ATLAS_URI, JWT_SECRET, EMPLOYEE_USERNAME,
+            # and EMPLOYEE_PASSWORD as Environment Variables in your CircleCI Project Settings.
+            node server.mjs &
+          background: true
+          
+      - run: 
+          name: Wait for Server to Start
+          command: sleep 15 # Give server time to initialize
+      
+      # Test 1: Rate Limiter (Brute-Force/DDoS Protection)
+      - run:
+          name: Test Login Rate Limiter (Expecting 6th attempt to fail with 429)
+          command: |
+            echo "--- Testing Rate Limiter ---"
+            LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
+            LOGIN_URL="https://localhost:3000/user/login"
+            
+            # Attempt login 6 times (your rate limit is 5)
+            for i in {1..6}; do
+              STATUS_CODE=$(curl --insecure -s -o /dev/null -w "%{http_code}" $LOGIN_URL -H "Content-Type: application/json" -d "$LOGIN_DATA")
+              echo "Attempt $i: Status Code $STATUS_CODE"
+              if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then
+                echo "FAIL: Rate limiter did not return 429 on 6th attempt. Got $STATUS_CODE."
+                exit 1
+              fi
+            done
+            echo "SUCCESS: Rate limiter passed."
+          
+      # Test 2: Employee Endpoint Authorization (Role-Based Access Control)
+      - run:
+          name: Test Employee Endpoint Authorization (Unauthenticated)
+          command: |
+            # CORRECTION 3: Use the correct URL '/employee/payments' instead of '/staff/payments'
+            EMPLOYEE_URL="https://localhost:3000/employee/payments"
+            UNAUTH_STATUS=$(curl --insecure -s -o /dev/null -w "%{http_code}" $EMPLOYEE_URL)
+            if [ "$UNAUTH_STATUS" -ne 401 ]; then
+              echo "FAIL: Unauthenticated access to $EMPLOYEE_URL returned $UNAUTH_STATUS (Expected 401)."
+              exit 1
+            fi
+            echo "SUCCESS: Employee endpoint correctly denies unauthorized access."
+            
+# ---------------------------------------------
+# WORKFLOWS: Define the order of jobs
+# ---------------------------------------------
+workflows:
+  build-and-test: # You can name your workflow anything
+    jobs:
+      - sonar_scan
+      - api_test:
+          requires:
+            - sonar_scan
