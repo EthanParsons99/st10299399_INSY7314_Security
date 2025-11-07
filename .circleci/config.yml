@@ -62,21 +62,49 @@ jobs:
           background: true
           
       - run:
-          name: Wait for Server to be UP (Check with 'curl -k')
+          name: Wait for Server to Be Accessible
           command: |
-            echo "Checking server status (max 20 attempts)..."
-            for i in $(seq 1 20); do
-              # Use the -k flag to ignore the self-signed SSL certificate error.
-              STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/ 2>> /tmp/curl_errors)
+            MAX_ATTEMPTS=20
+            # --- START LOGGING SERVER ERRORS ---
+            # Define a helper function to print the log on exit
+            cleanup_and_fail() {
+              echo "---------------------------------------------------------"
+              echo "FAIL: Server did not start in time or crashed. LAST KNOWN STATUS: $STATUS_CODE"
+              echo "---------------------------------------------------------"
+              echo "SERVER LOG (Captured startup output from /tmp/server.log):"
+              cat /tmp/server.log
+              echo "---------------------------------------------------------"
+              # Kill the background process only on failure
+              kill $(cat /tmp/server.pid) 
+              exit 1
+            }
+            
+            STATUS_CODE=0
+            for i in $(seq 1 $MAX_ATTEMPTS); do
+              echo "Attempt $i/$MAX_ATTEMPTS: Waiting for server..."
               
-              if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 500 ]; then 
-                echo "✓ Server is UP! Responded with status: $STATUS"
-                exit 0
+              # 1. CHECK IF THE SERVER PROCESS IS ALIVE (The most immediate diagnostic)
+              if ! ps -p $(cat /tmp/server.pid) > /dev/null; then 
+                echo "ERROR: Server process died unexpectedly during startup!";
+                # If the process died, we call the cleanup_and_fail function to print the log and exit.
+                cleanup_and_fail
               fi
               
-              echo "Attempt $i/20: Server not ready (Status: $STATUS). Waiting 3 seconds..."
+              # 2. CHECK IF CURL CAN CONNECT
+              # Use || true to prevent the curl failure (exit 7) from exiting the entire shell command.
+              STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/ || true)
+              
+              # Curl returns '000' if it can't connect, otherwise it returns the HTTP status.
+              if [ "$STATUS_CODE" -ne 0 ] && [ "$STATUS_CODE" != "000" ]; then 
+                echo "✓ Server is UP! Responded with status: $STATUS_CODE"
+                exit 0 
+              fi
+              
               sleep 3
             done
+            
+            # 3. IF THE LOOP COMPLETES WITHOUT CONNECTION, CALL THE FAILURE FUNCTION
+            cleanup_and_fail
             
             # --- FAILURE BLOCK: Print Logs ---
             echo "---------------------------------------------------------"
