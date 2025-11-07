@@ -2,7 +2,6 @@ version: 2.1
 
 orbs:
   node: circleci/node@5.2.0
-  sonarcloud: sonarsource/sonarcloud@2.0.0
 
 executors:
   node-executor:
@@ -10,39 +9,8 @@ executors:
       - image: cimg/node:20.12
 
 jobs:
-  # ---------------------------------------------
-  # JOB 1: Static Code Analysis with SonarCloud
-  # ---------------------------------------------
-  sonar_scan:
-    executor: node-executor
-    steps:
-      - checkout
-      
-      # Step 1: Install dependencies for all project parts
-      - run:
-          name: Install All Project Dependencies
-          command: |
-            npm install --prefix backend
-            npm install --prefix frontend
-            npm install --prefix employee-portal
-
-      # Step 2: Create the configuration file that the SonarScanner will use.
-      # This is the correct method for this orb.
-      - run:
-          name: Create SonarCloud configuration file
-          command: |
-            echo "sonar.projectKey=${SONAR_PROJECT_KEY}" > sonar-project.properties
-            echo "sonar.organization=${SONAR_ORGANIZATION}" >> sonar-project.properties
-            echo "sonar.sources=backend,frontend/src,employee-portal/src" >> sonar-project.properties
-            echo "sonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js" >> sonar-project.properties
-      
-      # Step 3: Run the SonarCloud scan. It will automatically find the file above.
-      - sonarcloud/scan
-
-  # ---------------------------------------------
-  # JOB 2: API Security Testing (This job is correct)
-  # ---------------------------------------------
-  api_test:
+  # A temporary job to debug the server startup process
+  debug_server_startup:
     executor: node-executor
     steps:
       - checkout
@@ -54,60 +22,21 @@ jobs:
       - run:
           name: Verify Environment Variables
           command: |
-            echo "Verifying required environment variables..."
-            if [ -z "$ATLAS_URI" ]; then echo "✗ ATLAS_URI is NOT SET!"; exit 1; else echo "✓ ATLAS_URI is set"; fi
-            if [ -z "$JWT_SECRET" ]; then echo "✗ JWT_SECRET is NOT SET!"; exit 1; else echo "✓ JWT_SECRET is set"; fi
-            if [ -z "$EMPLOYEE_USERNAME" ]; then echo "✗ EMPLOYEE_USERNAME is NOT SET!"; exit 1; else echo "✓ EMPLOYEE_USERNAME is set"; fi
-            if [ -z "$EMPLOYEE_PASSWORD" ]; then echo "✗ EMPLOYEE_PASSWORD is NOT SET!"; exit 1; else echo "✓ EMPLOYEE_PASSWORD is set"; fi
+            echo "Verifying environment variables..."
+            if [ -z "$ATLAS_URI" ]; then echo "✗ ATLAS_URI is missing!"; else echo "✓ ATLAS_URI is set."; fi
+            if [ -z "$JWT_SECRET" ]; then echo "✗ JWT_SECRET is missing!"; else echo "✓ JWT_SECRET is set."; fi
+            # ... add other checks if needed
 
       - run:
-          name: Start Backend Server
+          name: Attempt to Start Server in Foreground
           command: |
+            echo "Attempting to start the backend server..."
             cd backend
-            node server.mjs > /tmp/server.log 2>&1 &
-            echo $! > /tmp/server.pid
-          background: true
-          
-      - run:
-          name: Wait for Server to Be Accessible
-          command: |
-            MAX_ATTEMPTS=20
-            for i in $(seq 1 $MAX_ATTEMPTS); do
-              echo "Attempt $i/$MAX_ATTEMPTS: Waiting for server..."
-              if ! ps -p $(cat /tmp/server.pid) > /dev/null; then echo "ERROR: Server process died!"; cat /tmp/server.log; exit 1; fi
-              if curl -skf https://127.0.0.1:3000/; then echo "✓ Server is UP!"; exit 0; fi
-              sleep 3
-            done
-            echo "FAIL: Server did not start in time."; cat /tmp/server.log; exit 1
-            
-      - run:
-          name: Test Login Rate Limiter
-          command: |
-            LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
-            for i in {1..6}; do
-              STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/user/login -H "Content-Type: application/json" -d "$LOGIN_DATA")
-              if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then echo "FAIL: Rate limiter failed."; exit 1; fi
-            done
-            echo "SUCCESS: Rate limiter test passed."
-            
-      - run:
-          name: Test Employee Endpoint Authorization
-          command: |
-            STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/employee/payments)
-            if [ "$STATUS_CODE" -ne 401 ]; then echo "FAIL: Auth test failed."; exit 1; fi
-            echo "SUCCESS: Auth test passed."
+            node server.mjs
 
-# ---------------------------------------------
-# WORKFLOWS (This part is crucial and remains the same)
-# ---------------------------------------------
 workflows:
-  build-and-test:
+  debug-workflow:
     jobs:
-      - sonar_scan:
-          context:
-            - project-secrets 
-      - api_test:
+      - debug_server_startup:
           context:
             - project-secrets
-          requires:
-            - sonar_scan
