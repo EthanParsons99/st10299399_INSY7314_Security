@@ -53,7 +53,7 @@ const validateSignupInput = (req, res, next) => {
   next();
 };
 
-// --- MODIFIED LOGIN VALIDATION ---
+// LOGIN VALIDATION 
 const validateLoginInput = (req, res, next) => {
   const { name, password, accountNumber } = req.body;
 
@@ -104,7 +104,7 @@ const signupLimiter = rateLimit({
 });
 
 // ============================================
-// MODIFIED SIGNUP ROUTE
+// SIGNUP ROUTE
 // ============================================
 router.post("/signup", signupLimiter, validateSignupInput, async (req, res) => {
   try {
@@ -118,7 +118,7 @@ router.post("/signup", signupLimiter, validateSignupInput, async (req, res) => {
       return res.status(409).json({ message: "User already exists" });
     }
 
-    // --- NEW: GENERATE UNIQUE ACCOUNT NUMBER ---
+    // GENERATE UNIQUE ACCOUNT NUMBER
     let accountNumber;
     let isUnique = false;
     while (!isUnique) {
@@ -134,7 +134,7 @@ router.post("/signup", signupLimiter, validateSignupInput, async (req, res) => {
     const newDocument = { 
       name: sanitizedName, 
       password: hashedPassword, 
-      accountNumber: accountNumber, // <-- MODIFIED
+      accountNumber: accountNumber,
       createdAt: new Date() 
     };
     
@@ -143,7 +143,7 @@ router.post("/signup", signupLimiter, validateSignupInput, async (req, res) => {
     res.status(201).json({ 
       message: "Signup successful", 
       userId: result.insertedId,
-      accountNumber: accountNumber // <-- MODIFIED
+      accountNumber: accountNumber
     });
     
   } catch (error) {
@@ -153,11 +153,11 @@ router.post("/signup", signupLimiter, validateSignupInput, async (req, res) => {
 });
 
 // ============================================
-// MODIFIED LOGIN ROUTE
+// LOGIN ROUTE
 // ============================================
 router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
   try {
-    const { name, password, accountNumber } = req.body; // <-- MODIFIED
+    const { name, password, accountNumber } = req.body;
 
     const sanitizedName = sanitizeInput(name);
     const collection = db.collection("users");
@@ -166,15 +166,16 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
     let role = 'customer';
     let passwordMatch = false;
     
-    // --- MODIFIED: Handle Customer vs Employee Login ---
+    // Check if logging in as employee
+    // If so, verify against env vars
     if (sanitizedName === process.env.EMPLOYEE_USERNAME) {
       passwordMatch = await bcrypt.compare(password, process.env.EMPLOYEE_PASSWORD);
       if (passwordMatch) {
-        user = { name: process.env.EMPLOYEE_USERNAME }; // Keep user object simple
+        user = { name: process.env.EMPLOYEE_USERNAME }; 
         role = 'employee';
       }
     } else {
-      // Customer login now requires all three fields for lookup
+      // Customer login requires all three fields for lookup
       user = await collection.findOne({ name: sanitizedName, accountNumber: accountNumber });
       if (user) {
         passwordMatch = await bcrypt.compare(password, user.password);
@@ -208,7 +209,7 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
       role: role,
       token: token,
       expiresIn: expiresIn,
-      accountNumber: user.accountNumber // <-- MODIFIED (will be undefined for employee, which is fine)
+      accountNumber: user.accountNumber
     });
 
   } catch (error) {
@@ -218,7 +219,7 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
 });
 
 // ============================================
-// LOGOUT ROUTE (Unchanged)
+// LOGOUT ROUTE
 // ============================================
 router.post("/logout", (req, res) => {
   try {
