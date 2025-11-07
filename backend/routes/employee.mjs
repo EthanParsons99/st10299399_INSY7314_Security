@@ -1,7 +1,7 @@
 // backend/routes/employee.mjs
 import express from "express";
 import bcrypt from "bcrypt";
-// import jwt from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import db from "../db/conn.mjs";
 import { ObjectId } from "mongodb"; 
 import checkAuth, { 

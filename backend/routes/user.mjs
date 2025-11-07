@@ -195,7 +195,7 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
       { expiresIn }
     );
 
-    // const { activeSessions } = await import("../middleware/checkauth.mjs");
+    const { activeSessions } = await import("../middleware/checkauth.mjs");
     if (activeSessions.has(sessionId)) {
       const session = activeSessions.get(sessionId);
       session.token = token;

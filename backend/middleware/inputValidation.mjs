@@ -122,7 +122,7 @@ export function sanitizeObject(obj) {
   const sanitized = {};
   for (const [key, value] of Object.entries(obj)) {
     // Sanitize keys to prevent prototype pollution
-    const safeKey = key.replace(/^(?:__)|(?:prototype)|(?:constructor)/gi, '');
+    const safeKey = key.replace(/^__|prototype|constructor/gi, '');
     
     if (typeof value === 'object' && value !== null) {
       sanitized[safeKey] = sanitizeObject(value);
