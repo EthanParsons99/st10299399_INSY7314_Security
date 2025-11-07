@@ -17,35 +17,20 @@ jobs:
     executor: node-executor
     steps:
       - checkout
-      
-      # 1. Install dependencies for ALL parts of the project.
       - run:
-          name: Install Backend Dependencies
-          command: npm install --prefix backend
-      - run:
-          name: Install Customer Portal Dependencies
-          command: npm install --prefix frontend
-      - run:
-          name: Install Employee Portal Dependencies
-          command: npm install --prefix employee-portal
-
-      # 2. Configure Sonar Scanner via a properties file.
-      # FIX: Added sonar.projectKey and sonar.organization, which were mandatory and missing.
-      - run:
-          name: Generate sonar-project.properties
+          name: Install All Project Dependencies
           command: |
-            echo "sonar.projectBaseDir=." > sonar-project.properties
-            # 🚨 MANDATORY: REPLACE THESE PLACEHOLDERS WITH YOUR ACTUAL SONARCLOUD KEYS 🚨
-            echo "sonar.projectKey=YOUR_SONARCLOUD_PROJECT_KEY_HERE" >> sonar-project.properties
-            echo "sonar.organization=YOUR_SONARCLOUD_ORGANIZATION_KEY_HERE" >> sonar-project.properties
-            echo "sonar.language=js" >> sonar-project.properties
+            npm install --prefix backend
+            npm install --prefix frontend
+            npm install --prefix employee-portal
+      - run:
+          name: Create SonarCloud configuration file
+          command: |
+            echo "sonar.projectKey=${SONAR_PROJECT_KEY}" > sonar-project.properties
+            echo "sonar.organization=${SONAR_ORGANIZATION}" >> sonar-project.properties
             echo "sonar.sources=backend,frontend/src,employee-portal/src" >> sonar-project.properties
             echo "sonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js" >> sonar-project.properties
-      
-      # 3. Run the SonarCloud Analysis
       - sonarcloud/scan
-          # NOTE: No arguments are passed here. The orb will automatically detect and use
-          # the 'sonar-project.properties' file generated in the previous step.
 
   # ---------------------------------------------
   # JOB 2: API Security Testing
@@ -54,64 +39,65 @@ jobs:
     executor: node-executor
     steps:
       - checkout
-      
-      # Install dependencies only for the backend, as we are only testing the API
       - run:
           name: Install Backend Dependencies
           command: npm install --prefix backend
-      
-      # Start the backend server in the background
+      - run:
+          name: Verify Environment Variables
+          command: |
+            if [ -z "$ATLAS_URI" ]; then exit 1; fi; echo "✓ ATLAS_URI is set"
+            if [ -z "$JWT_SECRET" ]; then exit 1; fi; echo "✓ JWT_SECRET is set"
+            if [ -z "$EMPLOYEE_USERNAME" ]; then exit 1; fi; echo "✓ EMPLOYEE_USERNAME is set"
+            if [ -z "$EMPLOYEE_PASSWORD" ]; then exit 1; fi; echo "✓ EMPLOYEE_PASSWORD is set"
+            
       - run:
           name: Start Backend Server
           command: |
             cd backend
-            # Note: For this to work, you MUST add ATLAS_URI, JWT_SECRET, EMPLOYEE_USERNAME,
-            # and EMPLOYEE_PASSWORD as Environment Variables in your CircleCI Project Settings.
-            node server.mjs &
+            node server.mjs > /tmp/server.log 2>&1 &
+            echo $! > /tmp/server.pid
           background: true
           
-      - run: 
-          name: Wait for Server to Start
-          command: sleep 15 # Give server time to initialize
-      
-      # Test 1: Rate Limiter (Brute-Force/DDoS Protection)
       - run:
-          name: Test Login Rate Limiter (Expecting 6th attempt to fail with 429)
+          name: Wait for Server to Be Accessible
           command: |
-            echo "--- Testing Rate Limiter ---"
-            LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
-            LOGIN_URL="https://localhost:3000/user/login"
-            
-            # Attempt login 6 times (your rate limit is 5)
-            for i in $(seq 1 6); do
-              STATUS_CODE=$(curl --insecure -s -o /dev/null -w "%{http_code}" $LOGIN_URL -H "Content-Type: application/json" -d "$LOGIN_DATA")
-              echo "Attempt $i: Status Code $STATUS_CODE"
-              if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then
-                echo "FAIL: Rate limiter did not return 429 on 6th attempt. Got $STATUS_CODE."
-                exit 1
-              fi
+            MAX_ATTEMPTS=20
+            for i in $(seq 1 $MAX_ATTEMPTS); do
+              echo "Attempt $i/$MAX_ATTEMPTS: Waiting for server..."
+              if ! ps -p $(cat /tmp/server.pid) > /dev/null; then echo "ERROR: Server process died!"; cat /tmp/server.log; exit 1; fi
+              if curl -skf https://127.0.0.1:3000/; then echo "✓ Server is UP!"; exit 0; fi
+              sleep 3
             done
-            echo "SUCCESS: Rate limiter passed."
-          
-      # Test 2: Employee Endpoint Authorization (Role-Based Access Control)
-      - run:
-          name: Test Employee Endpoint Authorization (Unauthenticated)
-          command: |
-            EMPLOYEE_URL="https://localhost:3000/employee/payments"
-            UNAUTH_STATUS=$(curl --insecure -s -o /dev/null -w "%{http_code}" $EMPLOYEE_URL)
-            if [ "$UNAUTH_STATUS" -ne 401 ]; then
-              echo "FAIL: Unauthenticated access to $EMPLOYEE_URL returned $UNAUTH_STATUS (Expected 401)."
-              exit 1
-            fi
-            echo "SUCCESS: Employee endpoint correctly denies unauthorized access."
+            echo "FAIL: Server did not start in time."; cat /tmp/server.log; exit 1
             
+      - run:
+          name: Test Login Rate Limiter
+          command: |
+            LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
+            for i in {1..6}; do
+              STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/user/login -H "Content-Type: application/json" -d "$LOGIN_DATA")
+              if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then echo "FAIL: Rate limiter failed."; exit 1; fi
+            done
+            echo "SUCCESS: Rate limiter test passed."
+            
+      - run:
+          name: Test Employee Endpoint Authorization
+          command: |
+            STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/employee/payments)
+            if [ "$STATUS_CODE" -ne 401 ]; then echo "FAIL: Auth test failed."; exit 1; fi
+            echo "SUCCESS: Auth test passed."
+
 # ---------------------------------------------
-# WORKFLOWS: Define the order of jobs
+# WORKFLOWS
 # ---------------------------------------------
 workflows:
   build-and-test:
     jobs:
-      - sonar_scan
+      - sonar_scan:
+          context:
+            - project-secrets 
       - api_test:
+          context:
+            - project-secrets
           requires:
             - sonar_scan

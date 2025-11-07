@@ -10,13 +10,21 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import https from "https"; 
 import fs from "fs";       
+import rateLimit from 'express-rate-limit';
+import mongoSanitize from 'express-mongo-sanitize';
+import validator from 'validator';
 
 dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 const app = express();
 
-// Middleware
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ limit: '10kb', extended: false }));
+
+// ============================================
+//   Security Headers with Helmet
+// ============================================
 app.use(helmet({
   frameguard: { action: 'deny' },
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
@@ -24,16 +32,21 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", "https://localhost:3000"],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
     }
   },
-  referrerPolicy: { policy: "strict-origin-when-cross-origin" }
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  noSniff: true,
+  xssFilter: true
 }));
 
+// ============================================
+// CORS Configuration
+// ============================================
 const corsOptions = {
   origin: [
     // Customer Portal Ports
@@ -58,12 +71,23 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
-// Apply CORS middleware
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ limit: '10kb', extended: false }));
 
-// Additional security headers
+// ============================================
+// NoSQL Injection Protection since we using mongoDB
+// ============================================
+app.use((req, res, next) => {
+  if (req.body) {
+    req.body = mongoSanitize.sanitize(req.body, {
+      replaceWith: '_'
+    });
+  }
+  next();
+});
+
+// ============================================
+// Additional Security Headers
+// ============================================
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -72,12 +96,58 @@ app.use((req, res, next) => {
     next();
 });
 
+// ============================================
+// Rate Limiting 3 attempts per 15 minutes
+// ============================================
+const employeeLoginLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, 
+  max: 3, 
+  message: 'Too many login attempts. Please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    console.warn(`🚨 Rate limit exceeded for employee login from IP: ${req.ip}`);
+    res.status(429).json({
+      message: 'Too many login attempts. Please try again in 15 minutes.'
+    });
+  }
+});
 
+const generalEmployeeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: 'Too many requests. Please try again later.'
+});
+
+// ============================================
+//   Input Sanitization
+// ============================================
+const sanitizeEmployeeInput = (req, res, next) => {
+
+  if (req.body) {
+    if (req.body.email) {
+      req.body.email = validator.normalizeEmail(req.body.email);
+    }
+    if (req.body.name) {
+      req.body.name = validator.escape(req.body.name);
+    }
+  }
+  next();
+};
+
+app.use('/employee/login', employeeLoginLimiter);
+app.use('/employee', generalEmployeeLimiter, sanitizeEmployeeInput);
+
+// ============================================
+// Route Handlers
+// ============================================
 app.use("/post", posts);
 app.use("/user", users);
 app.use("/employee", employees);
 
-// This section sets up the HTTPS server using your SSL keys
+// ============================================
+//  HTTPS Server Setup
+// ============================================
 const options = {
   key: fs.readFileSync('keys/privatekey.pem'),
   cert: fs.readFileSync('keys/certificate.pem')
@@ -85,10 +155,10 @@ const options = {
 
 const server = https.createServer(options, app);
 
-
 server.listen(PORT, () => {
   console.log(`✓ Server started at https://localhost:${PORT}`);
-  console.log(`✓ Frontend should be at http://localhost:3001`);
+  console.log(`✓ Employee Portal: https://localhost:3002`);
+  console.log(`✓ Customer Portal: https://localhost:3001`);
 });
 
 server.on('error', (err) => {

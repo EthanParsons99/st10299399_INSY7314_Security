@@ -4,6 +4,8 @@ import crypto from "crypto";
 
 // Session store to track active sessions 
 export const activeSessions = new Map();
+// For Account lockout after failed attempts
+export const loginAttempts = new Map();
 
 export default (req, res, next) => {
   try {
@@ -29,19 +31,19 @@ export default (req, res, next) => {
 
     const sessionData = activeSessions.get(sessionId);
 
-    // Verify the token matches what we stored (security check)
+    // Verify the token matches what we stored
     if (sessionData.token !== token) {
       console.warn('Token mismatch for session:', sessionId);
       return res.status(401).json({ message: "Session invalid or expired." });
     }
 
-    // Verify IP hasn't changed (prevents session jacking)
+    // Verify IP hasn't changed (for session jacking prevention)
     const storedIp = sessionData.ip;
     const currentIp = req.ip || req.connection.remoteAddress;
-    
-    console.log('IP Check - Stored:', storedIp, 'Current:', currentIp);
-    
-    if (storedIp !== currentIp) {
+    const isLocalhost = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(currentIp) && 
+                        ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(storedIp);
+
+    if (storedIp !== currentIp && !isLocalhost) {
       console.warn('IP mismatch detected - possible session jacking attempt');
       activeSessions.delete(sessionId);
       return res.status(401).json({ message: "Session hijacking detected. Please log in again." });
@@ -70,9 +72,10 @@ export default (req, res, next) => {
 };
 
 export function createSession(ip, userName, token, role = 'customer') {
-  const sessionId = crypto.randomUUID();
+  // Use crypto.randomBytes for robust, cross-platform session ID generation
+  const sessionId = crypto.randomBytes(16).toString('hex');
   
-  // Store the token as well (for verification)
+  // Store the token as well 
   activeSessions.set(sessionId, { 
     ip, 
     userName, 
@@ -91,9 +94,50 @@ export function destroySession(sessionId) {
 }
 
 export const checkEmployeeRole = (req, res, next) => {
-  if (req.userData && req.userData.role === 'employee') {
-    next();
-  } else {
-    return res.status(403).json({ message: "Forbidden: Insufficient permissions." });
+  if (!req.userData) {
+    return res.status(401).json({ message: "Authentication required." });
   }
+  
+  if (req.userData.role !== 'employee') {
+    // Log suspicious access attempts
+    console.warn(`Unauthorized employee access attempt by: ${req.userData.name} (${req.userData.role})`);
+    return res.status(403).json({ message: "Forbidden: Employee access only." });
+  }
+  
+  next();
 };
+
+
+
+export function recordFailedLogin(identifier) {
+  const attempts = loginAttempts.get(identifier) || { count: 0, firstAttempt: Date.now() };
+  attempts.count++;
+  attempts.lastAttempt = Date.now();
+  
+  loginAttempts.set(identifier, attempts);
+  
+  // Clear after 15 minutes
+  setTimeout(() => {
+    loginAttempts.delete(identifier);
+  }, 15 * 60 * 1000);
+  
+  return attempts.count;
+}
+
+export function isAccountLocked(identifier) {
+  const attempts = loginAttempts.get(identifier);
+  if (!attempts) return false;
+  
+  // Lock after 5 failed attempts within 15 minutes
+  if (attempts.count >= 5) {
+    const timeSinceFirst = Date.now() - attempts.firstAttempt;
+    if (timeSinceFirst < 15 * 60 * 1000) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function clearLoginAttempts(identifier) {
+  loginAttempts.delete(identifier);
+}
