@@ -6,7 +6,7 @@ function SignupForm() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // Added isLoading for better UX
+  const [isLoading, setIsLoading] = useState(false); 
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -23,7 +23,7 @@ function SignupForm() {
       const data = await response.json();
 
       if (response.status === 201) {
-        // --- MODIFIED: DISPLAY THE NEW ACCOUNT NUMBER ---
+        // --- DISPLAY THE NEW ACCOUNT NUMBER ---
         setMessage(`Success! Your new account number is: ${data.accountNumber}. Please save this to log in.`);
         // Clear form fields
         setName('');
@@ -40,6 +40,7 @@ function SignupForm() {
     }
   };
 
+  // Render the signup form
   return (
     <div className="form-container">
       <form onSubmit={handleSubmit}>

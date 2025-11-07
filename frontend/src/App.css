@@ -217,7 +217,7 @@ button:hover {
 }
 .button-logout:hover {
   background-color: var(--destructive-red-hover);
-  color: var(--white); /* Keep text white on hover for red button */
+  color: var(--white); 
   transform: translateY(-2px);
 }
 
@@ -288,14 +288,12 @@ button:hover {
   line-height: 1.6;
 }
 
-/* This container will make the buttons look like they're in a form */
 .landing-actions-form {
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
 
-/* Override existing .btn styles to make them full-width and uniform */
 .landing-actions-form .btn {
   display: flex; 
   justify-content: center; 
@@ -310,11 +308,10 @@ button:hover {
   box-sizing: border-box; 
 }
 
-/* --- ADDED THESE LINES BACK --- */
 .landing-actions-form .btn-primary {
   background-color: var(--dark-green);
   color: var(--white);
-  border: 2px solid var(--dark-green); /* Added for consistent sizing */
+  border: 2px solid var(--dark-green); 
 }
 
 .landing-actions-form .btn-secondary {
@@ -327,7 +324,7 @@ button:hover {
 .landing-actions-form .btn-primary:hover {
   background-color: var(--primary-green);
   color: var(--black);
-  border-color: var(--primary-green); /* Match border on hover */
+  border-color: var(--primary-green);
   transform: translateY(-3px);
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
@@ -339,9 +336,7 @@ button:hover {
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
-/* Remove old landing page styles that are no longer needed */
 .landing-container, .landing-intro, .landing-actions, .landing-branding {
-  /* This effectively removes the old styles by overriding them with defaults */
   display: block;
   text-align: left;
   height: auto;
@@ -364,7 +359,7 @@ button:hover {
   font-size: 12px;
   font-weight: bold;
   text-transform: capitalize;
-  display: inline-block; /* Ensures badge displays correctly */
+  display: inline-block; 
 }
 
 /* Yellow badge for pending status */
@@ -388,7 +383,7 @@ button:hover {
 .user-details {
   display: flex;
   flex-direction: column;
-  align-items: flex-end; /* Aligns text to the right */
+  align-items: flex-end; 
 }
 
 .account-number-display {

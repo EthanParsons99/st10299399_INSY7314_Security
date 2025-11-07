@@ -57,6 +57,7 @@ function PaymentForm() {
       swiftCode,
     };
 
+    // Send payment request
     try {
       const response = await fetch('https://localhost:3000/post', {
         method: 'POST',
@@ -88,6 +89,7 @@ function PaymentForm() {
     }
   };
 
+  // Render form
   return (
     <div className="component-container">
       <h3>Create International Payment</h3>

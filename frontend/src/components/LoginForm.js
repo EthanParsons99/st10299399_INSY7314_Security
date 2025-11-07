@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 function LoginForm() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
-  const [accountNumber, setAccountNumber] = useState(''); // <-- ADDED
+  const [accountNumber, setAccountNumber] = useState(''); 
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -21,7 +21,7 @@ function LoginForm() {
     setPassword(e.target.value);
   };
 
-  const handleAccountNumberChange = (e) => { // <-- ADDED
+  const handleAccountNumberChange = (e) => { 
     const value = e.target.value;
     if (/^[0-9]*$/.test(value)) {
       setAccountNumber(value);
@@ -41,6 +41,7 @@ function LoginForm() {
     setMessage('');
     setIsLoading(true);
 
+    // Basic input validation
     try {
       const apiUrl = 'https://localhost:3000';
       const response = await fetch(`${apiUrl}/user/login`, {
@@ -55,6 +56,7 @@ function LoginForm() {
 
       const data = await response.json();
 
+      // Handle response
       if (response.ok) {
         sessionStorage.setItem('token', data.token);
         sessionStorage.setItem('userName', data.name);
@@ -76,6 +78,7 @@ function LoginForm() {
     }
   };
 
+  // Render the login form
   return (
     <div className="form-container">
       <form onSubmit={handleSubmit}>
@@ -102,7 +105,7 @@ function LoginForm() {
             disabled={isLoading}
           />
         </div>
-        {/* --- NEW FIELD ADDED HERE --- */}
+        {}
         <div className="form-group">
           <label htmlFor="accountNumber">Account Number:</label>
           <input
