@@ -26,7 +26,6 @@ try {
 } catch (e) {
   console.error('✗ MongoDB connection failed:', e.message);
   console.error('Make sure ATLAS_URI is correct and MongoDB cluster is accessible');
-  process.exit(1);
 }
 
 db = client.db("users");

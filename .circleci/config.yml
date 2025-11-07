@@ -39,19 +39,26 @@ jobs:
     executor: node-executor
     steps:
       - checkout
+      
       - run:
           name: Install Backend Dependencies
           command: npm install --prefix backend
             
       - run:
-          name: Start Server in Background (Wait 5s for full boot)
+          name: Start Server in Background (Attempt 2 - Explicit Node Call)
           command: |
-            # 1. Run the server from the 'backend' directory.
-            # 2. Redirect stdout/stderr to a log file for debugging.
-            cd backend
-            npm start > /tmp/server.log 2>&1 &
-            echo $! > /tmp/server_pid # Save PID
-            sleep 5 # Give the server a few extra seconds to boot up and connect to MongoDB
+            # Use the absolute path to node and the server file to avoid path issues
+            # The 'cd' is now inside the background command for more reliability
+            
+            # Start the server (node server.mjs) from the 'backend' directory
+            (cd backend && node server.mjs) > /tmp/server.log 2>&1 & 
+            
+            # Save the process ID to a file 
+            echo $! > /tmp/server_pid 
+            
+            # Give the server time to boot up
+            sleep 5
+            
           background: true
           
       - run:
@@ -59,9 +66,7 @@ jobs:
           command: |
             echo "Checking server status (max 20 attempts)..."
             for i in $(seq 1 20); do
-              # We must use -k because the certificate is self-signed (insecure, but needed for CI)
-              # The --silent (-s) flag is used to hide progress
-              # The --fail (-f) flag makes curl exit with a non-zero code on 4xx/5xx errors
+              # Use the -k flag to ignore the self-signed SSL certificate error.
               STATUS=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/ 2>> /tmp/curl_errors)
               
               if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 500 ]; then 
@@ -73,17 +78,15 @@ jobs:
               sleep 3
             done
             
-            # --- FAILURE BLOCK ---
+            # --- FAILURE BLOCK: Print Logs ---
             echo "---------------------------------------------------------"
             echo "FAIL: Server did not start in time. LAST KNOWN STATUS: $STATUS"
             echo "---------------------------------------------------------"
-            echo "SERVER LOG (backend/npm start output):"
+            echo "SERVER LOG (Captured startup output):"
+            # This is the most critical line for diagnosis
             cat /tmp/server.log
             echo "---------------------------------------------------------"
-            echo "CURL ERRORS (Network/SSL issues):"
-            cat /tmp/curl_errors
-            echo "---------------------------------------------------------"
-            kill $(cat /tmp/server_pid) # Attempt to kill the stuck server
+            kill $(cat /tmp/server_pid) # Kill the stuck server process
             exit 1
             
       - run:
