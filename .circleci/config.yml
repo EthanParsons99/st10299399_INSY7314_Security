@@ -2,6 +2,7 @@ version: 2.1
 
 orbs:
   node: circleci/node@5.2.0
+  sonarcloud: sonarsource/sonarcloud@2.0.0
 
 executors:
   node-executor:
@@ -9,27 +10,97 @@ executors:
       - image: cimg/node:20.12
 
 jobs:
-  # This is the ONLY job we will run. Its sole purpose is to get the real error.
-  debug_server_startup:
+  # ---------------------------------------------
+  # JOB 1: Static Code Analysis with SonarCloud
+  # ---------------------------------------------
+  sonar_scan:
     executor: node-executor
     steps:
       - checkout
-      
+      - run:
+          name: Install All Project Dependencies
+          command: |
+            npm install --prefix backend
+            npm install --prefix frontend
+            npm install --prefix employee-portal
+      - run:
+          name: Create SonarCloud configuration file
+          command: |
+            echo "sonar.projectKey=${SONAR_PROJECT_KEY}" > sonar-project.properties
+            echo "sonar.organization=${SONAR_ORGANIZATION}" >> sonar-project.properties
+            echo "sonar.sources=backend,frontend/src,employee-portal/src" >> sonar-project.properties
+            echo "sonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js" >> sonar-project.properties
+      - sonarcloud/scan
+
+  # ---------------------------------------------
+  # JOB 2: API Security Testing
+  # ---------------------------------------------
+  api_test:
+    executor: node-executor
+    steps:
+      - checkout
       - run:
           name: Install Backend Dependencies
           command: npm install --prefix backend
-      
-      # This step will now reveal the true error message.
       - run:
-          name: Attempt to Start Server in Foreground
+          name: Verify Environment Variables
           command: |
-            echo "Attempting to start the backend server in the foreground..."
+            if [ -z "$ATLAS_URI" ]; then exit 1; fi
+            if [ -z "$JWT_SECRET" ]; then exit 1; fi
+            if [ -z "$EMPLOYEE_USERNAME" ]; then exit 1; fi
+            if [ -z "$EMPLOYEE_PASSWORD" ]; then exit 1; fi
+            echo "✓ All required API test variables are set."
+            
+      - run:
+          name: Start Backend Server
+          command: |
             cd backend
-            node server.mjs
+            # --- THIS IS THE FIX ---
+            # Use 'nohup' to ensure the server process persists after the shell exits.
+            nohup node server.mjs > /tmp/server.log 2>&1 &
+            echo $! > /tmp/server.pid
+          background: true
+          
+      - run:
+          name: Wait for Server to Be Accessible
+          command: |
+            MAX_ATTEMPTS=20
+            for i in $(seq 1 $MAX_ATTEMPTS); do
+              echo "Attempt $i/$MAX_ATTEMPTS: Waiting for server..."
+              if ! ps -p $(cat /tmp/server.pid) > /dev/null; then echo "ERROR: Server process died!"; cat /tmp/server.log; exit 1; fi
+              if curl -skf https://127.0.0.1:3000/; then echo "✓ Server is UP!"; exit 0; fi
+              sleep 3
+            done
+            echo "FAIL: Server did not start in time."; cat /tmp/server.log; exit 1
+            
+      - run:
+          name: Test Login Rate Limiter
+          command: |
+            LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
+            for i in {1..6}; do
+              STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/user/login -H "Content-Type: application/json" -d "$LOGIN_DATA")
+              if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then echo "FAIL: Rate limiter failed."; exit 1; fi
+            done
+            echo "SUCCESS: Rate limiter test passed."
+            
+      - run:
+          name: Test Employee Endpoint Authorization
+          command: |
+            STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/employee/payments)
+            if [ "$STATUS_CODE" -ne 401 ]; then echo "FAIL: Auth test failed."; exit 1; fi
+            echo "SUCCESS: Auth test passed."
 
+# ---------------------------------------------
+# WORKFLOWS
+# ---------------------------------------------
 workflows:
-  debug-workflow:
+  build-and-test:
     jobs:
-      - debug_server_startup:
+      - sonar_scan:
+          context:
+            - project-secrets 
+      - api_test:
           context:
             - project-secrets
+          requires:
+            - sonar_scan
