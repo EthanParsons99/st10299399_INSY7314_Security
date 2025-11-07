@@ -13,11 +13,11 @@ const router = express.Router();
 
 
 // REGEX PATTERNS FOR WHITELISTING 
-const amountRegex = /^\d+(\.\d{1,2})?$/; // Positive number with up to 2 decimal places (e.g., 100, 100.00)
-const currencyRegex = /^[A-Z]{3}$/; // Exactly 3 uppercase letters (e.g., USD, EUR)
-const providerRegex = /^[a-zA-Z0-9\s-]{3,50}$/; // Alphanumeric, spaces, and hyphens, 3-50 chars
-const accountRegex = /^\d{6,34}$/; // 6 to 34 digits (Covers most bank accounts)
-const swiftRegex = /^[A-Z0-9]{8,11}$/; // 8 or 11 uppercase alphanumeric chars (SWIFT/BIC format)
+const amountRegex = /^\d+(\.\d{1,2})?$/;
+const currencyRegex = /^[A-Z]{3}$/;
+const providerRegex = /^[a-zA-Z0-9\s-]{3,50}$/;
+const accountRegex = /^\d{6,34}$/;
+const swiftRegex = /^[A-Z0-9]{8,11}$/;
 
 //  INPUT VALIDATION MIDDLEWARE
 const validatePaymentInput = (req, res, next) => {
