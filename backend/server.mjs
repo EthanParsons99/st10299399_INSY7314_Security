@@ -14,6 +14,10 @@ import rateLimit from 'express-rate-limit';
 import mongoSanitize from 'express-mongo-sanitize';
 import validator from 'validator';
 
+// --- NEW IMPORTS: To create absolute paths for SSL keys ---
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 dotenv.config();
 
 const PORT = process.env.PORT || 3000;
@@ -33,7 +37,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:"],
-      connectSrc: ["'self'", "https://localhost:3000"],
+      connectSrc: ["'self'"], // Simplified: 'self' includes the same origin, so localhost:3000 is covered
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: [],
@@ -49,39 +53,26 @@ app.use(helmet({
 // ============================================
 const corsOptions = {
   origin: [
-    // Customer Portal Ports
-    'http://localhost:3001',
-    'https://localhost:3001',
-    'http://127.0.0.1:3001',
-    'https://127.0.0.1:3001',
-    
-    // Employee Portal Ports
-    'http://localhost:3002',
-    'https://localhost:3002',
-    'http://127.0.0.1:3002',
-    'https://127.0.0.1:3002',
-    
-    // Other common dev ports
-    'http://localhost:5173',
-    'http://127.0.0.1:5173'
+    'http://localhost:3001', 'https://localhost:3001', 'http://127.0.0.1:3001', 'https://127.0.0.1:3001',
+    'http://localhost:3002', 'https://localhost:3002', 'http://127.0.0.1:3002', 'https://127.0.0.1:3002',
+    'http://localhost:5173', 'http://127.0.0.1:5173'
   ],
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
-
 app.use(cors(corsOptions));
 
 // ============================================
-// NoSQL Injection Protection since we using mongoDB
+// NoSQL Injection Protection
 // ============================================
 app.use(mongoSanitize({
   replaceWith: '_'
 }));
 
 // ============================================
-// Additional Security Headers
+// Additional Security Headers (These are good, but some are redundant with Helmet. Kept for explicit security)
 // ============================================
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -92,7 +83,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================
-// Rate Limiting 3 attempts per 15 minutes
+// Rate Limiting
 // ============================================
 const employeeLoginLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, 
@@ -102,34 +93,21 @@ const employeeLoginLimiter = rateLimit({
   legacyHeaders: false,
   handler: (req, res) => {
     console.warn(`🚨 Rate limit exceeded for employee login from IP: ${req.ip}`);
-    res.status(429).json({
-      message: 'Too many login attempts. Please try again in 15 minutes.'
-    });
+    res.status(429).json({ message: 'Too many login attempts. Please try again in 15 minutes.' });
   }
 });
-
-const generalEmployeeLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: 'Too many requests. Please try again later.'
-});
+const generalEmployeeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: 'Too many requests.' });
 
 // ============================================
 //   Input Sanitization
 // ============================================
 const sanitizeEmployeeInput = (req, res, next) => {
-
   if (req.body) {
-    if (req.body.email) {
-      req.body.email = validator.normalizeEmail(req.body.email);
-    }
-    if (req.body.name) {
-      req.body.name = validator.escape(req.body.name);
-    }
+    if (req.body.email) req.body.email = validator.normalizeEmail(req.body.email);
+    if (req.body.name) req.body.name = validator.escape(req.body.name);
   }
   next();
 };
-
 app.use('/employee/login', employeeLoginLimiter);
 app.use('/employee', generalEmployeeLimiter, sanitizeEmployeeInput);
 
@@ -141,24 +119,40 @@ app.use("/user", users);
 app.use("/employee", employees);
 
 // ============================================
-//  HTTPS Server Setup
+//  HTTPS Server Setup (FIXED WITH ABSOLUTE PATHS)
 // ============================================
+
+// Get the directory name of the current module (server.mjs)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Construct the full, absolute path to the SSL key files
+const keyPath = path.join(__dirname, 'keys', 'privatekey.pem');
+const certPath = path.join(__dirname, 'keys', 'certificate.pem');
+
 const options = {
-  key: fs.readFileSync('keys/privatekey.pem'),
-  cert: fs.readFileSync('keys/certificate.pem')
+  key: fs.readFileSync(keyPath),
+  cert: fs.readFileSync(certPath)
 };
 
 const server = https.createServer(options, app);
 
 server.listen(PORT, () => {
   console.log(`✓ Server started at https://localhost:${PORT}`);
-  console.log(`✓ Employee Portal: https://localhost:3002`);
-  console.log(`✓ Customer Portal: https://localhost:3001`);
+  console.log(`✓ Employee Portal (Expected): http://localhost:3002`);
+  console.log(`✓ Customer Portal (Expected): http://localhost:3001`);
 });
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`✗ Port ${PORT} is already in use!`);
+    process.exit(1);
+  }
+  // Added robust error logging for the SSL key file issue
+  else if (err.code === 'ENOENT') {
+    console.error(`✗ FATAL ERROR: SSL key file not found.`);
+    console.error(`  The server tried to read a key from this path: ${err.path}`);
+    console.error(`  Please ensure the 'keys' folder and its .pem files are in the 'backend' directory.`);
     process.exit(1);
   }
   throw err;

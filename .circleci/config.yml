@@ -2,6 +2,7 @@ version: 2.1
 
 orbs:
   node: circleci/node@5.2.0
+  sonarcloud: sonarsource/sonarcloud@2.0.0
 
 executors:
   node-executor:
@@ -9,47 +10,94 @@ executors:
       - image: cimg/node:20.12
 
 jobs:
-  # This job's ONLY purpose is to verify file paths before starting the server.
-  debug_file_paths:
+  # ---------------------------------------------
+  # JOB 1: Static Code Analysis with SonarCloud
+  # ---------------------------------------------
+  sonar_scan:
     executor: node-executor
     steps:
       - checkout
-      
       - run:
-          name: Check File System Before Server Start
+          name: Install All Project Dependencies
           command: |
-            echo "--- Verifying project structure from the root ---"
-            ls -la
+            npm install --prefix backend
+            npm install --prefix frontend
+            npm install --prefix employee-portal
+      - run:
+          name: Create SonarCloud configuration file
+          command: |
+            echo "sonar.projectKey=${SONAR_PROJECT_KEY}" > sonar-project.properties
+            echo "sonar.organization=${SONAR_ORGANIZATION}" >> sonar-project.properties
+            echo "sonar.sources=backend,frontend/src,employee-portal/src" >> sonar-project.properties
+            echo "sonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js" >> sonar-project.properties
+      - sonarcloud/scan
+
+  # ---------------------------------------------
+  # JOB 2: API Security Testing
+  # ---------------------------------------------
+  api_test:
+    executor: node-executor
+    steps:
+      - checkout
+      - run:
+          name: Install Backend Dependencies
+          command: npm install --prefix backend
+      - run:
+          name: Verify Environment Variables
+          command: |
+            if [ -z "$ATLAS_URI" ]; then exit 1; fi; echo "✓ ATLAS_URI is set"
+            if [ -z "$JWT_SECRET" ]; then exit 1; fi; echo "✓ JWT_SECRET is set"
+            if [ -z "$EMPLOYEE_USERNAME" ]; then exit 1; fi; echo "✓ EMPLOYEE_USERNAME is set"
+            if [ -z "$EMPLOYEE_PASSWORD" ]; then exit 1; fi; echo "✓ EMPLOYEE_PASSWORD is set"
             
-            echo "\n--- Changing directory to backend ---"
+      - run:
+          name: Start Backend Server
+          command: |
             cd backend
+            node server.mjs > /tmp/server.log 2>&1 &
+            echo $! > /tmp/server.pid
+          background: true
+          
+      - run:
+          name: Wait for Server to Be Accessible
+          command: |
+            MAX_ATTEMPTS=20
+            for i in $(seq 1 $MAX_ATTEMPTS); do
+              echo "Attempt $i/$MAX_ATTEMPTS: Waiting for server..."
+              if ! ps -p $(cat /tmp/server.pid) > /dev/null; then echo "ERROR: Server process died!"; cat /tmp/server.log; exit 1; fi
+              if curl -skf https://127.0.0.1:3000/; then echo "✓ Server is UP!"; exit 0; fi
+              sleep 3
+            done
+            echo "FAIL: Server did not start in time."; cat /tmp/server.log; exit 1
             
-            echo "\n--- Verifying structure inside backend directory ---"
-            pwd
-            ls -la
+      - run:
+          name: Test Login Rate Limiter
+          command: |
+            LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
+            for i in {1..6}; do
+              STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/user/login -H "Content-Type: application/json" -d "$LOGIN_DATA")
+              if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then echo "FAIL: Rate limiter failed."; exit 1; fi
+            done
+            echo "SUCCESS: Rate limiter test passed."
             
-            echo "\n--- Checking for keys folder ---"
-            if [ -d "keys" ]; then
-              echo "✓ 'keys' directory exists."
-              ls -la keys
-            else
-              echo "✗ FATAL: 'keys' directory does NOT exist inside 'backend'."
-              exit 1
-            fi
+      - run:
+          name: Test Employee Endpoint Authorization
+          command: |
+            STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/employee/payments)
+            if [ "$STATUS_CODE" -ne 401 ]; then echo "FAIL: Auth test failed."; exit 1; fi
+            echo "SUCCESS: Auth test passed."
 
-            echo "\n--- Attempting to read privatekey.pem ---"
-            if [ -f "keys/privatekey.pem" ]; then
-              echo "✓ 'keys/privatekey.pem' exists."
-              # Try to read the first line of the file. If this fails, we have a permissions issue.
-              head -n 1 keys/privatekey.pem
-            else
-              echo "✗ FATAL: 'keys/privatekey.pem' does NOT exist."
-              exit 1
-            fi
-            
-            echo "\n✓✓✓ All path checks passed. The server should be able to find its key files."
-
+# ---------------------------------------------
+# WORKFLOWS
+# ---------------------------------------------
 workflows:
-  debug-workflow:
+  build-and-test:
     jobs:
-      - debug_file_paths
+      - sonar_scan:
+          context:
+            - project-secrets 
+      - api_test:
+          context:
+            - project-secrets
+          requires:
+            - sonar_scan
