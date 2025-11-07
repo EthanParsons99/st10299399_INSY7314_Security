@@ -3,6 +3,7 @@ import express from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import db from "../db/conn.mjs";
+import { ObjectId } from "mongodb"; 
 import checkAuth, { 
   createSession, 
   destroySession, 
@@ -14,90 +15,32 @@ import checkAuth, {
 
 const router = express.Router();
 
-// Employee login with username 
+// Employee login 
 router.post("/login", async (req, res) => {
   try {
     let { name, password } = req.body;
-
-    // Input validation
-    if (!name || !password) {
-      return res.status(400).json({ message: "Username and password are required." });
-    }
-
-    // Sanitize username
+    if (!name || !password) return res.status(400).json({ message: "Username and password are required." });
     name = name.trim();
+    if (isAccountLocked(name)) return res.status(429).json({ message: "Account temporarily locked." });
 
-    // Check if account is locked
-    if (isAccountLocked(name)) {
-      console.warn(`Locked account login attempt: ${name}`);
-      return res.status(429).json({ 
-        message: "Account temporarily locked due to multiple failed attempts. Try again later." 
-      });
-    }
-
-    // Check against environment variable credentials
     const envUsername = process.env.EMPLOYEE_USERNAME;
     const envPasswordHash = process.env.EMPLOYEE_PASSWORD;
+    if (!envUsername || !envPasswordHash) return res.status(500).json({ message: "Server configuration error." });
+    if (name !== envUsername) { recordFailedLogin(name); return res.status(401).json({ message: "Invalid credentials." }); }
 
-    if (!envUsername || !envPasswordHash) {
-      console.error("Employee credentials not configured in environment variables");
-      return res.status(500).json({ message: "Server configuration error." });
-    }
-
-    // Check if username matches
-    if (name !== envUsername) {
-      recordFailedLogin(name);
-      // Don't reveal whether username exists
-      return res.status(401).json({ message: "Invalid credentials." });
-    }
-
-    // Verify password against the hashed password in .env
     const isPasswordValid = await bcrypt.compare(password, envPasswordHash);
+    if (!isPasswordValid) { recordFailedLogin(name); return res.status(401).json({ message: "Invalid credentials." }); }
 
-    if (!isPasswordValid) {
-      const attemptCount = recordFailedLogin(name);
-      console.warn(`Failed login attempt ${attemptCount} for employee: ${name}`);
-      return res.status(401).json({ message: "Invalid credentials." });
-    }
-
-    // Clear failed attempts on successful login
     clearLoginAttempts(name);
-
-    // Get client IP
-    const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() 
-      || req.ip 
-      || req.connection.remoteAddress;
-
-    // Create session first to get sessionId
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip || req.connection.remoteAddress;
     const sessionId = createSession(clientIp, name, '', 'employee');
-
-    // Create JWT token with sessionId
-    const token = jwt.sign(
-      { 
-        name: name,
-        role: 'employee',
-        sessionId
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "2h" } 
-    );
-
-    // Update session with final token
+    const token = jwt.sign({ name, role: 'employee', sessionId }, process.env.JWT_SECRET, { expiresIn: "2h" });
+    
     const { activeSessions } = await import("../middleware/checkauth.mjs");
     const session = activeSessions.get(sessionId);
-    if (session) {
-      session.token = token;
-    }
+    if (session) session.token = token;
 
-    console.log(`✓ Employee login successful: ${name}`);
-
-    res.status(200).json({
-      token,
-      user: {
-        name: name,
-        role: 'employee'
-      }
-    });
+    res.status(200).json({ token, user: { name, role: 'employee' } });
 
   } catch (error) {
     console.error("Employee login error:", error);
@@ -105,17 +48,39 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// Get all payments/transactions 
+
+// Fetch pending payments - Employee only
 router.get("/payments", checkAuth, checkEmployeeRole, async (req, res) => {
   try {
     console.log(`✓ Employee ${req.userData.name} accessing payments`);
     
     const collection = db.collection("payments");
-    const payments = await collection.find({}).sort({ createdAt: -1 }).toArray();
     
-    console.log(`✓ Found ${payments.length} payment records`);
+    // This pipeline correctly fetches ONLY pending payments AND joins the user's account number.
+    const pipeline = [
+      { $match: { status: "pending" } },
+      {
+        $lookup: {
+          from: "users",
+          localField: "owner",
+          foreignField: "name",
+          as: "userDetails"
+        }
+      },
+      { $unwind: { path: "$userDetails", preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 1, amount: 1, currency: 1, provider: 1, recipientAccount: 1, 
+          swiftCode: 1, status: 1, owner: 1, createdAt: 1,
+          customerAccountNumber: "$userDetails.accountNumber"
+        }
+      },
+      { $sort: { createdAt: -1 } }
+    ];
+
+    const payments = await collection.aggregate(pipeline).toArray();
     
-    // Return just the array
+    console.log(`✓ Found ${payments.length} pending payment records`);
     res.status(200).json(payments);
 
   } catch (error) {
@@ -126,70 +91,43 @@ router.get("/payments", checkAuth, checkEmployeeRole, async (req, res) => {
     });
   }
 });
-// Get payment by ID
+
+
+// Get payment by ID 
 router.get("/payments/:id", checkAuth, checkEmployeeRole, async (req, res) => {
   try {
-    const { ObjectId } = await import("mongodb");
     const collection = db.collection("payments");
-    
-    const payment = await collection.findOne({ 
-      _id: new ObjectId(req.params.id) 
-    });
+    const payment = await collection.findOne({ _id: new ObjectId(req.params.id) });
 
-    if (!payment) {
-      return res.status(404).json({ 
-        success: false,
-        message: "Payment not found" 
-      });
-    }
+    if (!payment) return res.status(404).json({ success: false, message: "Payment not found" });
 
-    res.status(200).json({
-      success: true,
-      payment: payment
-    });
+    res.status(200).json({ success: true, payment: payment });
 
   } catch (error) {
     console.error("Error fetching payment:", error);
-    res.status(500).json({ 
-      success: false,
-      message: "Failed to fetch payment",
-      error: error.message 
-    });
+    res.status(500).json({ success: false, message: "Failed to fetch payment", error: error.message });
   }
 });
-// Update payment status  Approve or Reject 
+
+
+// Update payment status (approve/reject)
 router.patch("/payments/:id", checkAuth, checkEmployeeRole, async (req, res) => {
   try {
-    const { ObjectId } = await import("mongodb");
     const { status } = req.body;
     
-    // Validate status
     if (!status || !['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Invalid status. Must be 'approved' or 'rejected'" 
-      });
+      return res.status(400).json({ success: false, message: "Invalid status. Must be 'approved' or 'rejected'" });
     }
 
     const collection = db.collection("payments");
     
-    // Update the payment with new status and processing info
     const result = await collection.updateOne(
       { _id: new ObjectId(req.params.id) },
-      { 
-        $set: { 
-          status: status,
-          processedBy: req.userData.name,
-          processedAt: new Date()
-        } 
-      }
+      { $set: { status: status, processedBy: req.userData.name, processedAt: new Date() } }
     );
 
     if (result.matchedCount === 0) {
-      return res.status(404).json({ 
-        success: false,
-        message: "Payment not found" 
-      });
+      return res.status(404).json({ success: false, message: "Payment not found or already processed" });
     }
 
     console.log(`✓ Payment ${req.params.id} ${status} by ${req.userData.name}`);
@@ -197,31 +135,22 @@ router.patch("/payments/:id", checkAuth, checkEmployeeRole, async (req, res) => 
     res.status(200).json({
       success: true,
       message: `Payment ${status} successfully`,
-      paymentId: req.params.id,
-      status: status
     });
 
   } catch (error) {
     console.error("Error updating payment status:", error);
-    res.status(500).json({ 
-      success: false,
-      message: "Failed to update payment status",
-      error: error.message 
-    });
+    res.status(500).json({ success: false, message: "Failed to update payment status", error: error.message });
   }
 });
-// Employee logout
+
+
+// Employee logout & dashboard
 router.post("/logout", checkAuth, checkEmployeeRole, (req, res) => {
   destroySession(req.userData.sessionId);
   res.status(200).json({ message: "Logged out successfully." });
 });
-
-// Protected employee dashboard
 router.get("/dashboard", checkAuth, checkEmployeeRole, (req, res) => {
-  res.status(200).json({ 
-    message: "Employee dashboard",
-    user: req.userData 
-  });
+  res.status(200).json({ message: "Employee dashboard", user: req.userData });
 });
 
 export default router;
