@@ -18,47 +18,48 @@ jobs:
     steps:
       - checkout
       
-      # 1. Install dependencies for ALL parts of the project.
+      # Step 1: Install dependencies for all project parts
       - run:
           name: Install All Project Dependencies
           command: |
             npm install --prefix backend
             npm install --prefix frontend
             npm install --prefix employee-portal
+
+      # Step 2: Create the configuration file that the SonarScanner will use.
+      # This is the correct method for this orb.
+      - run:
+          name: Create SonarCloud configuration file
+          command: |
+            echo "sonar.projectKey=${SONAR_PROJECT_KEY}" > sonar-project.properties
+            echo "sonar.organization=${SONAR_ORGANIZATION}" >> sonar-project.properties
+            echo "sonar.sources=backend,frontend/src,employee-portal/src" >> sonar-project.properties
+            echo "sonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js" >> sonar-project.properties
       
-      # 2. Run the SonarCloud Analysis (authentication is handled by the context)
-      - sonarcloud/scan:
-          extra_args: >-
-            -Dsonar.projectKey=${SONAR_PROJECT_KEY}
-            -Dsonar.organization=${SONAR_ORGANIZATION}
-            -Dsonar.sources=backend,frontend/src,employee-portal/src
-            -Dsonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js
+      # Step 3: Run the SonarCloud scan. It will automatically find the file above.
+      - sonarcloud/scan
 
   # ---------------------------------------------
-  # JOB 2: API Security Testing
+  # JOB 2: API Security Testing (This job is correct)
   # ---------------------------------------------
   api_test:
     executor: node-executor
     steps:
       - checkout
       
-      # Install dependencies only for the backend
       - run:
           name: Install Backend Dependencies
           command: npm install --prefix backend
       
-      # Verify environment variables are accessible from the context
       - run:
           name: Verify Environment Variables
           command: |
-            echo "=== Environment Variables Check ==="
+            echo "Verifying required environment variables..."
             if [ -z "$ATLAS_URI" ]; then echo "✗ ATLAS_URI is NOT SET!"; exit 1; else echo "✓ ATLAS_URI is set"; fi
             if [ -z "$JWT_SECRET" ]; then echo "✗ JWT_SECRET is NOT SET!"; exit 1; else echo "✓ JWT_SECRET is set"; fi
             if [ -z "$EMPLOYEE_USERNAME" ]; then echo "✗ EMPLOYEE_USERNAME is NOT SET!"; exit 1; else echo "✓ EMPLOYEE_USERNAME is set"; fi
             if [ -z "$EMPLOYEE_PASSWORD" ]; then echo "✗ EMPLOYEE_PASSWORD is NOT SET!"; exit 1; else echo "✓ EMPLOYEE_PASSWORD is set"; fi
-            echo "All required environment variables are configured!"
-      
-      # Start the backend server in the background
+
       - run:
           name: Start Backend Server
           command: |
@@ -67,93 +68,45 @@ jobs:
             echo $! > /tmp/server.pid
           background: true
           
-      # Wait for the server to become accessible, with robust logging
       - run:
           name: Wait for Server to Be Accessible
           command: |
             MAX_ATTEMPTS=20
             for i in $(seq 1 $MAX_ATTEMPTS); do
-              echo "Attempt $i/$MAX_ATTEMPTS: Waiting for server at https://127.0.0.1:3000..."
-              
-              SERVER_PID=$(cat /tmp/server.pid)
-              if ! ps -p $SERVER_PID > /dev/null; then
-                echo "ERROR: Server process died!"
-                echo "=== Full Server Log ==="
-                cat /tmp/server.log
-                exit 1
-              fi
-
-              if curl --insecure --silent --fail --output /dev/null https://127.0.0.1:3000/; then
-                echo "✓ Server is UP and responsive!"
-                exit 0
-              fi
-              
+              echo "Attempt $i/$MAX_ATTEMPTS: Waiting for server..."
+              if ! ps -p $(cat /tmp/server.pid) > /dev/null; then echo "ERROR: Server process died!"; cat /tmp/server.log; exit 1; fi
+              if curl -skf https://127.0.0.1:3000/; then echo "✓ Server is UP!"; exit 0; fi
               sleep 3
             done
-
-            echo "FAIL: Server did not become responsive in time."
-            echo "=== Full Server Log ==="
-            cat /tmp/server.log
-            exit 1
-
-      # Test 1: Rate Limiter
+            echo "FAIL: Server did not start in time."; cat /tmp/server.log; exit 1
+            
       - run:
-          name: Test Login Rate Limiter (Expecting 6th attempt to fail with 429)
+          name: Test Login Rate Limiter
           command: |
-            echo "--- Testing Rate Limiter ---"
             LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
-            LOGIN_URL="https://127.0.0.1:3000/user/login"
-            
-            for i in $(seq 1 6); do
-              STATUS_CODE=$(curl --insecure -s -o /dev/null -w "%{http_code}" $LOGIN_URL -H "Content-Type: application/json" -d "$LOGIN_DATA")
-              echo "Attempt $i: Status Code $STATUS_CODE"
-              if [ "$i" -eq 6 ]; then
-                if [ "$STATUS_CODE" -ne 429 ]; then
-                  echo "FAIL: Rate limiter did not return 429 on 6th attempt. Got $STATUS_CODE."
-                  exit 1
-                fi
-              fi
+            for i in {1..6}; do
+              STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/user/login -H "Content-Type: application/json" -d "$LOGIN_DATA")
+              if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then echo "FAIL: Rate limiter failed."; exit 1; fi
             done
-            echo "SUCCESS: Rate limiter test passed!"
-          
-      # Test 2: Employee Endpoint Authorization
+            echo "SUCCESS: Rate limiter test passed."
+            
       - run:
-          name: Test Employee Endpoint Authorization (Unauthenticated)
+          name: Test Employee Endpoint Authorization
           command: |
-            echo "--- Testing Employee Endpoint Authorization ---"
-            EMPLOYEE_URL="https://127.0.0.1:3000/employee/payments"
-            UNAUTH_STATUS=$(curl --insecure -s -o /dev/null -w "%{http_code}" $EMPLOYEE_URL)
-            
-            echo "Unauthenticated request status: $UNAUTH_STATUS"
-            
-            if [ "$UNAUTH_STATUS" -ne 401 ]; then
-              echo "FAIL: Unauthenticated access to $EMPLOYEE_URL returned $UNAUTH_STATUS (Expected 401)."
-              exit 1
-            fi
-            echo "SUCCESS: Employee endpoint correctly denies unauthorized access!"
-      
-      # Cleanup: Show server logs if any step fails
-      - run:
-          name: Show Server Logs on Failure
-          command: |
-            echo "=== Final Server Log ==="
-            if [ -f /tmp/server.log ]; then cat /tmp/server.log; else echo "No log file found"; fi
-          when: on_fail
-            
+            STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/employee/payments)
+            if [ "$STATUS_CODE" -ne 401 ]; then echo "FAIL: Auth test failed."; exit 1; fi
+            echo "SUCCESS: Auth test passed."
+
 # ---------------------------------------------
-# WORKFLOWS: Define the order of jobs
+# WORKFLOWS (This part is crucial and remains the same)
 # ---------------------------------------------
 workflows:
   build-and-test:
     jobs:
       - sonar_scan:
-          # --- THIS IS THE CRITICAL FIX ---
-          # Grant this job access to the secrets stored in the 'project-secrets' context
           context:
             - project-secrets 
       - api_test:
-          # --- THIS IS THE CRITICAL FIX ---
-          # Grant this job access to the same secrets for the backend server to run
           context:
             - project-secrets
           requires:
