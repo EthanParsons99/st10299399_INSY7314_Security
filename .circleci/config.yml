@@ -53,11 +53,12 @@ jobs:
             
       - run:
           name: Start Backend Server
+          # --- THIS IS THE FIX ---
+          # Removed 'nohup' for a simpler, more compatible backgrounding method.
+          # The '&' operator handles sending the process to the background.
           command: |
             cd backend
-            # --- THIS IS THE FIX ---
-            # Use 'nohup' to ensure the server process persists after the shell exits.
-            nohup node server.mjs > /tmp/server.log 2>&1 &
+            node server.mjs > /tmp/server.log 2>&1 &
             echo $! > /tmp/server.pid
           background: true
           
@@ -79,7 +80,7 @@ jobs:
             LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
             for i in {1..6}; do
               STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/user/login -H "Content-Type: application/json" -d "$LOGIN_DATA")
-              if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then echo "FAIL: Rate limiter failed."; exit 1; fi
+              if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then echo "FAIL: Rate limiter failed on attempt $i with status $STATUS_CODE."; exit 1; fi
             done
             echo "SUCCESS: Rate limiter test passed."
             
@@ -87,7 +88,7 @@ jobs:
           name: Test Employee Endpoint Authorization
           command: |
             STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/employee/payments)
-            if [ "$STATUS_CODE" -ne 401 ]; then echo "FAIL: Auth test failed."; exit 1; fi
+            if [ "$STATUS_CODE" -ne 401 ]; then echo "FAIL: Auth test failed with status $STATUS_CODE."; exit 1; fi
             echo "SUCCESS: Auth test passed."
 
 # ---------------------------------------------
