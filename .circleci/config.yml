@@ -20,28 +20,19 @@ jobs:
       
       # 1. Install dependencies for ALL parts of the project.
       - run:
-          name: Install Backend Dependencies
-          command: npm install --prefix backend
-      - run:
-          name: Install Customer Portal Dependencies
-          command: npm install --prefix frontend
-      - run:
-          name: Install Employee Portal Dependencies
-          command: npm install --prefix employee-portal
-
-      # 2. Configure Sonar Scanner via a properties file.
-      - run:
-          name: Generate sonar-project.properties
+          name: Install All Project Dependencies
           command: |
-            echo "sonar.projectBaseDir=." > sonar-project.properties
-            echo "sonar.projectKey=EthanParsons99_st10299399_INSY7314_Security" >> sonar-project.properties
-            echo "sonar.organization=ethanparsons99" >> sonar-project.properties
-            echo "sonar.language=js" >> sonar-project.properties
-            echo "sonar.sources=backend,frontend/src,employee-portal/src" >> sonar-project.properties
-            echo "sonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js" >> sonar-project.properties
+            npm install --prefix backend
+            npm install --prefix frontend
+            npm install --prefix employee-portal
       
-      # 3. Run the SonarCloud Analysis
-      - sonarcloud/scan
+      # 2. Run the SonarCloud Analysis (authentication is handled by the context)
+      - sonarcloud/scan:
+          extra_args: >-
+            -Dsonar.projectKey=${SONAR_PROJECT_KEY}
+            -Dsonar.organization=${SONAR_ORGANIZATION}
+            -Dsonar.sources=backend,frontend/src,employee-portal/src
+            -Dsonar.exclusions=**/node_modules/**,**/build/**,**/*.test.js,**/*.spec.js
 
   # ---------------------------------------------
   # JOB 2: API Security Testing
@@ -51,192 +42,61 @@ jobs:
     steps:
       - checkout
       
-      # Verify project structure
-      - run:
-          name: Verify Project Structure
-          command: |
-            echo "=== Project Structure ==="
-            ls -la
-            echo ""
-            echo "=== Backend Directory ==="
-            ls -la backend/
-            echo ""
-            echo "=== Checking for keys folder ==="
-            if [ -d "backend/keys" ]; then
-              echo "✓ keys/ folder found"
-              ls -la backend/keys/
-            else
-              echo "✗ keys/ folder NOT FOUND!"
-              exit 1
-            fi
-            
-            echo ""
-            echo "=== Checking for required files ==="
-            if [ -f "backend/server.mjs" ]; then
-              echo "✓ server.mjs found"
-            else
-              echo "✗ server.mjs NOT FOUND!"
-              exit 1
-            fi
-            
-            if [ -f "backend/keys/certificate.pem" ]; then
-              echo "✓ certificate.pem found in keys/"
-            else
-              echo "✗ certificate.pem NOT FOUND in keys/!"
-              exit 1
-            fi
-            
-            if [ -f "backend/keys/privatekey.pem" ]; then
-              echo "✓ privatekey.pem found in keys/"
-            else
-              echo "✗ privatekey.pem NOT FOUND in keys/!"
-              exit 1
-            fi
-      
       # Install dependencies only for the backend
       - run:
           name: Install Backend Dependencies
-          command: |
-            echo "Installing backend dependencies..."
-            npm install --prefix backend
-            echo "Dependencies installed successfully"
+          command: npm install --prefix backend
       
-      # Verify environment variables
+      # Verify environment variables are accessible from the context
       - run:
           name: Verify Environment Variables
           command: |
             echo "=== Environment Variables Check ==="
-            if [ -z "$ATLAS_URI" ]; then
-              echo "✗ ATLAS_URI is NOT SET!"
-              exit 1
-            else
-              echo "✓ ATLAS_URI is set"
-            fi
-            
-            if [ -z "$JWT_SECRET" ]; then
-              echo "✗ JWT_SECRET is NOT SET!"
-              exit 1
-            else
-              echo "✓ JWT_SECRET is set"
-            fi
-            
-            if [ -z "$EMPLOYEE_USERNAME" ]; then
-              echo "✗ EMPLOYEE_USERNAME is NOT SET!"
-              exit 1
-            else
-              echo "✓ EMPLOYEE_USERNAME is set: $EMPLOYEE_USERNAME"
-            fi
-            
-            if [ -z "$EMPLOYEE_PASSWORD" ]; then
-              echo "✗ EMPLOYEE_PASSWORD is NOT SET!"
-              exit 1
-            else
-              echo "✓ EMPLOYEE_PASSWORD is set"
-            fi
-            echo "All environment variables are configured!"
+            if [ -z "$ATLAS_URI" ]; then echo "✗ ATLAS_URI is NOT SET!"; exit 1; else echo "✓ ATLAS_URI is set"; fi
+            if [ -z "$JWT_SECRET" ]; then echo "✗ JWT_SECRET is NOT SET!"; exit 1; else echo "✓ JWT_SECRET is set"; fi
+            if [ -z "$EMPLOYEE_USERNAME" ]; then echo "✗ EMPLOYEE_USERNAME is NOT SET!"; exit 1; else echo "✓ EMPLOYEE_USERNAME is set"; fi
+            if [ -z "$EMPLOYEE_PASSWORD" ]; then echo "✗ EMPLOYEE_PASSWORD is NOT SET!"; exit 1; else echo "✓ EMPLOYEE_PASSWORD is set"; fi
+            echo "All required environment variables are configured!"
       
-      # Start the backend server in the background with logging
+      # Start the backend server in the background
       - run:
           name: Start Backend Server
           command: |
             cd backend
-            echo "Starting HTTPS server on port 3000..."
-            echo "Current directory: $(pwd)"
-            
-            # Show first 20 chars of each env var to verify they're set (don't expose full values)
-            echo "Environment variables check:"
-            echo "ATLAS_URI: ${ATLAS_URI:0:20}..."
-            echo "JWT_SECRET: ${JWT_SECRET:0:20}..."
-            echo "EMPLOYEE_USERNAME: $EMPLOYEE_USERNAME"
-            echo "EMPLOYEE_PASSWORD: ${EMPLOYEE_PASSWORD:0:20}..."
-            
-            # Start server with environment variables explicitly passed
-            ATLAS_URI="$ATLAS_URI" \
-            JWT_SECRET="$JWT_SECRET" \
-            EMPLOYEE_USERNAME="$EMPLOYEE_USERNAME" \
-            EMPLOYEE_PASSWORD="$EMPLOYEE_PASSWORD" \
             node server.mjs > /tmp/server.log 2>&1 &
-            
-            SERVER_PID=$!
-            echo "Server started with PID: $SERVER_PID"
-            echo $SERVER_PID > /tmp/server.pid
-            
-            # Give it a moment to start
-            sleep 3
-            
-            # Show initial log output
-            echo "=== Initial Server Output ==="
-            head -n 20 /tmp/server.log
-            echo "============================="
-            
-            # Check if process is still alive
-            if ps -p $SERVER_PID > /dev/null; then
-              echo "✓ Server process is running"
-            else
-              echo "✗ Server process died immediately!"
-              echo "=== Full Server Log ==="
-              cat /tmp/server.log
-              echo "=================="
-              exit 1
-            fi
+            echo $! > /tmp/server.pid
           background: true
           
-      # Wait for server with better logging
+      # Wait for the server to become accessible, with robust logging
       - run:
           name: Wait for Server to Be Accessible
           command: |
-            SERVER_URL="https://127.0.0.1:3000"
             MAX_ATTEMPTS=20
-            ATTEMPT=1
-            
-            echo "Waiting for backend server at $SERVER_URL to start..."
-            
-            # Give server initial time to start up
-            sleep 5
-            
-            while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-              echo "Attempt $ATTEMPT of $MAX_ATTEMPTS..."
+            for i in $(seq 1 $MAX_ATTEMPTS); do
+              echo "Attempt $i/$MAX_ATTEMPTS: Waiting for server at https://127.0.0.1:3000..."
               
-              # Check if server process is still running
-              if [ -f /tmp/server.pid ]; then
-                SERVER_PID=$(cat /tmp/server.pid)
-                if ! ps -p $SERVER_PID > /dev/null 2>&1; then
-                  echo "ERROR: Server process died!"
-                  echo "=== Server Log ==="
-                  cat /tmp/server.log
-                  echo "=================="
-                  exit 1
-                fi
+              SERVER_PID=$(cat /tmp/server.pid)
+              if ! ps -p $SERVER_PID > /dev/null; then
+                echo "ERROR: Server process died!"
+                echo "=== Full Server Log ==="
+                cat /tmp/server.log
+                exit 1
               fi
-              
-              # Show last few lines of log
-              if [ -f /tmp/server.log ]; then
-                echo "Latest log output:"
-                tail -n 5 /tmp/server.log
-              fi
-              
-              # Try to connect to server (checking root endpoint)
-              if curl -skf --connect-timeout 5 --max-time 10 "$SERVER_URL/" > /dev/null 2>&1; then
-                echo "✓ Server is UP and responsive after $ATTEMPT attempts!"
-                
-                # Test that we can actually reach the endpoint
-                RESPONSE=$(curl -sk "$SERVER_URL/")
-                echo "Server response: $RESPONSE"
+
+              if curl --insecure --silent --fail --output /dev/null https://127.0.0.1:3000/; then
+                echo "✓ Server is UP and responsive!"
                 exit 0
               fi
               
-              echo "Server not ready yet. Waiting 3 seconds..."
               sleep 3
-              ATTEMPT=$((ATTEMPT + 1))
             done
-            
-            echo "FAIL: Server did not become responsive after $MAX_ATTEMPTS attempts."
+
+            echo "FAIL: Server did not become responsive in time."
             echo "=== Full Server Log ==="
             cat /tmp/server.log
-            echo "======================="
             exit 1
-      
-      # Test 1: Rate Limiter (Brute-Force/DDoS Protection)
+
+      # Test 1: Rate Limiter
       - run:
           name: Test Login Rate Limiter (Expecting 6th attempt to fail with 429)
           command: |
@@ -247,20 +107,16 @@ jobs:
             for i in $(seq 1 6); do
               STATUS_CODE=$(curl --insecure -s -o /dev/null -w "%{http_code}" $LOGIN_URL -H "Content-Type: application/json" -d "$LOGIN_DATA")
               echo "Attempt $i: Status Code $STATUS_CODE"
-              
-              # On the 6th attempt, we expect 429 (Too Many Requests)
               if [ "$i" -eq 6 ]; then
                 if [ "$STATUS_CODE" -ne 429 ]; then
                   echo "FAIL: Rate limiter did not return 429 on 6th attempt. Got $STATUS_CODE."
                   exit 1
-                else
-                  echo "✓ Rate limiter correctly returned 429 on 6th attempt"
                 fi
               fi
             done
             echo "SUCCESS: Rate limiter test passed!"
           
-      # Test 2: Employee Endpoint Authorization (Role-Based Access Control)
+      # Test 2: Employee Endpoint Authorization
       - run:
           name: Test Employee Endpoint Authorization (Unauthenticated)
           command: |
@@ -276,17 +132,12 @@ jobs:
             fi
             echo "SUCCESS: Employee endpoint correctly denies unauthorized access!"
       
-      # Cleanup: Show server logs if tests fail
+      # Cleanup: Show server logs if any step fails
       - run:
           name: Show Server Logs on Failure
           command: |
             echo "=== Final Server Log ==="
-            if [ -f /tmp/server.log ]; then
-              cat /tmp/server.log
-            else
-              echo "No log file found"
-            fi
-            echo "======================="
+            if [ -f /tmp/server.log ]; then cat /tmp/server.log; else echo "No log file found"; fi
           when: on_fail
             
 # ---------------------------------------------
@@ -295,7 +146,15 @@ jobs:
 workflows:
   build-and-test:
     jobs:
-      - sonar_scan
+      - sonar_scan:
+          # --- THIS IS THE CRITICAL FIX ---
+          # Grant this job access to the secrets stored in the 'project-secrets' context
+          context:
+            - project-secrets 
       - api_test:
+          # --- THIS IS THE CRITICAL FIX ---
+          # Grant this job access to the same secrets for the backend server to run
+          context:
+            - project-secrets
           requires:
             - sonar_scan
