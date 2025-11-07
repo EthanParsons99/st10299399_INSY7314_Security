@@ -76,14 +76,9 @@ app.use(cors(corsOptions));
 // ============================================
 // NoSQL Injection Protection since we using mongoDB
 // ============================================
-app.use((req, res, next) => {
-  if (req.body) {
-    req.body = mongoSanitize.sanitize(req.body, {
-      replaceWith: '_'
-    });
-  }
-  next();
-});
+app.use(mongoSanitize({
+  replaceWith: '_'
+}));
 
 // ============================================
 // Additional Security Headers
