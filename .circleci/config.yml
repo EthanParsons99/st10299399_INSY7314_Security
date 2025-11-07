@@ -45,18 +45,26 @@ jobs:
       - run:
           name: Verify Environment Variables
           command: |
-            if [ -z "$ATLAS_URI" ]; then exit 1; fi
-            if [ -z "$JWT_SECRET" ]; then exit 1; fi
-            if [ -z "$EMPLOYEE_USERNAME" ]; then exit 1; fi
-            if [ -z "$EMPLOYEE_PASSWORD" ]; then exit 1; fi
-            echo "✓ All required API test variables are set."
+            if [ -z "$ATLAS_URI" ]; then exit 1; fi; echo "✓ ATLAS_URI is set"
+            if [ -z "$JWT_SECRET" ]; then exit 1; fi; echo "✓ JWT_SECRET is set"
+            if [ -z "$EMPLOYEE_USERNAME" ]; then exit 1; fi; echo "✓ EMPLOYEE_USERNAME is set"
+            if [ -z "$EMPLOYEE_PASSWORD" ]; then exit 1; fi; echo "✓ EMPLOYEE_PASSWORD is set"
+            
       - run:
           name: Start Backend Server
           command: |
             cd backend
+            # --- THIS IS THE FIX ---
+            # Explicitly pass environment variables to the node command to ensure they are available.
+            # This is the most robust way to start a background service in CI.
+            ATLAS_URI="$ATLAS_URI" \
+            JWT_SECRET="$JWT_SECRET" \
+            EMPLOYEE_USERNAME="$EMPLOYEE_USERNAME" \
+            EMPLOYEE_PASSWORD="$EMPLOYEE_PASSWORD" \
             node server.mjs > /tmp/server.log 2>&1 &
             echo $! > /tmp/server.pid
           background: true
+          
       - run:
           name: Wait for Server to Be Accessible
           command: |
@@ -68,6 +76,7 @@ jobs:
               sleep 3
             done
             echo "FAIL: Server did not start in time."; cat /tmp/server.log; exit 1
+            
       - run:
           name: Test Login Rate Limiter
           command: |
@@ -77,6 +86,7 @@ jobs:
               if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then echo "FAIL: Rate limiter failed."; exit 1; fi
             done
             echo "SUCCESS: Rate limiter test passed."
+            
       - run:
           name: Test Employee Endpoint Authorization
           command: |
