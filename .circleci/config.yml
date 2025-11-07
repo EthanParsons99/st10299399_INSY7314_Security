@@ -44,38 +44,36 @@ jobs:
           name: Install Backend Dependencies
           command: npm install --prefix backend
             
+      # --- NEW: Improved Server Startup with Guaranteed PID Capture ---
       - run:
-          name: Start Server in Background (Attempt 2 - Explicit Node Call)
+          name: Start Backend Server
           command: |
-            # Use the absolute path to node and the server file to avoid path issues
-            # The 'cd' is now inside the background command for more reliability
+            # 1. Start the server in the background, redirecting output to /tmp/server.log
+            (cd backend && node server.mjs > /tmp/server.log 2>&1) & 
             
-            # Start the server (node server.mjs) from the 'backend' directory
-            (cd backend && node server.mjs) > /tmp/server.log 2>&1 & 
+            # 2. CRITICAL FIX: Capture the PID ($!) immediately after starting the background job.
+            # Use ${!:-1} to ensure the file exists even if the server crashes instantly.
+            echo ${!:-1} > /tmp/server.pid
             
-            # Save the process ID to a file 
-            echo $! > /tmp/server_pid 
-            
-            # Give the server time to boot up
-            sleep 5
-            
+            # Give the server a few seconds to boot up
+            sleep 5 
           background: true
           
+      # --- NEW: Wait Step with Robust Logging ---
       - run:
           name: Wait for Server to Be Accessible
           command: |
             MAX_ATTEMPTS=20
-            # --- START LOGGING SERVER ERRORS ---
-            # Define a helper function to print the log on exit
+            # Define a helper function to print the log and exit on any failure
             cleanup_and_fail() {
               echo "---------------------------------------------------------"
-              echo "FAIL: Server did not start in time or crashed. LAST KNOWN STATUS: $STATUS_CODE"
+              echo "FAIL: Server did not start in time or crashed."
               echo "---------------------------------------------------------"
               echo "SERVER LOG (Captured startup output from /tmp/server.log):"
               cat /tmp/server.log
               echo "---------------------------------------------------------"
-              # Kill the background process only on failure
-              kill $(cat /tmp/server.pid) 
+              # Attempt to kill the process (even if the PID is 1, kill will usually fail silently)
+              kill $(cat /tmp/server.pid) || true
               exit 1
             }
             
@@ -83,18 +81,18 @@ jobs:
             for i in $(seq 1 $MAX_ATTEMPTS); do
               echo "Attempt $i/$MAX_ATTEMPTS: Waiting for server..."
               
-              # 1. CHECK IF THE SERVER PROCESS IS ALIVE (The most immediate diagnostic)
+              # 1. CHECK IF THE SERVER PROCESS IS ALIVE
+              # If the process is dead, exit 1 and print the log immediately.
               if ! ps -p $(cat /tmp/server.pid) > /dev/null; then 
-                echo "ERROR: Server process died unexpectedly during startup!";
-                # If the process died, we call the cleanup_and_fail function to print the log and exit.
+                echo "ERROR: Server process died unexpectedly at attempt $i!";
                 cleanup_and_fail
               fi
               
               # 2. CHECK IF CURL CAN CONNECT
-              # Use || true to prevent the curl failure (exit 7) from exiting the entire shell command.
+              # Use || true to prevent curl exit code 7 from terminating the whole script.
               STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/ || true)
               
-              # Curl returns '000' if it can't connect, otherwise it returns the HTTP status.
+              # Check for a valid HTTP status code (not 0 or "000" which means 'could not connect').
               if [ "$STATUS_CODE" -ne 0 ] && [ "$STATUS_CODE" != "000" ]; then 
                 echo "✓ Server is UP! Responded with status: $STATUS_CODE"
                 exit 0 
@@ -106,27 +104,30 @@ jobs:
             # 3. IF THE LOOP COMPLETES WITHOUT CONNECTION, CALL THE FAILURE FUNCTION
             cleanup_and_fail
             
-            # --- FAILURE BLOCK: Print Logs ---
-            echo "---------------------------------------------------------"
-            echo "FAIL: Server did not start in time. LAST KNOWN STATUS: $STATUS"
-            echo "---------------------------------------------------------"
-            echo "SERVER LOG (Captured startup output):"
-            # This is the most critical line for diagnosis
-            cat /tmp/server.log
-            echo "---------------------------------------------------------"
-            kill $(cat /tmp/server_pid) # Kill the stuck server process
-            exit 1
-            
+      # --- The remaining tests use the same curl commands ---
       - run:
           name: Test Login Rate Limiter
           command: |
-            # ... (rest of your curl commands)
-            # MAKE SURE ALL CURL COMMANDS STILL USE https://127.0.0.1:3000 AND THE -k FLAG
+            LOGIN_DATA='{"name": "adminuser", "password": "Admin@1234"}'
+            for i in {1..6}; do
+              STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/user/login -H "Content-Type: application/json" -d "$LOGIN_DATA")
+              if [ "$i" -eq 6 ] && [ "$STATUS_CODE" -ne 429 ]; then echo "FAIL: Rate limiter failed."; exit 1; fi
+            done
+            echo "SUCCESS: Rate limiter test passed."
             
+      - run:
+          name: Test Employee Endpoint Authorization
+          command: |
+            STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/employee/payments)
+            if [ "$STATUS_CODE" -ne 401 ]; then echo "FAIL: Auth test failed."; exit 1; fi
+            echo "SUCCESS: Auth test passed."
+
       - run:
           name: Clean up background processes
           when: always
-          command: kill $(cat /tmp/server_pid)
+          # Use || true to prevent failure if the process is already dead and kill fails
+          command: kill $(cat /tmp/server.pid) || true
+
 # ---------------------------------------------
 # WORKFLOWS
 # ---------------------------------------------
