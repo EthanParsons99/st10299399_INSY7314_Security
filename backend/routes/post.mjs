@@ -12,13 +12,6 @@ import {
 const router = express.Router();
 
 
-// REGEX PATTERNS FOR WHITELISTING 
-const amountRegex = /^\d+(\.\d{1,2})?$/; // Positive number with up to 2 decimal places (e.g., 100, 100.00)
-const currencyRegex = /^[A-Z]{3}$/; // Exactly 3 uppercase letters (e.g., USD, EUR)
-const providerRegex = /^[a-zA-Z0-9\s-]{3,50}$/; // Alphanumeric, spaces, and hyphens, 3-50 chars
-const accountRegex = /^\d{6,34}$/; // 6 to 34 digits (Covers most bank accounts)
-const swiftRegex = /^[A-Z0-9]{8,11}$/; // 8 or 11 uppercase alphanumeric chars (SWIFT/BIC format)
-
 //  INPUT VALIDATION MIDDLEWARE
 const validatePaymentInput = (req, res, next) => {
   // First, check for dangerous patterns in the entire request body
@@ -50,7 +43,6 @@ const validatePaymentInput = (req, res, next) => {
 
 
 // CREATE PAYMENT (PROTECTED & VALIDATED)
-
 router.post("/", checkauth, validatePaymentInput, async (req, res) => {
   try {
     const paymentData = req.body;
@@ -96,11 +88,10 @@ router.post("/", checkauth, validatePaymentInput, async (req, res) => {
 
 
 // GET ALL PAYMENTS FOR LOGGED-IN USER
-
 router.get("/", checkauth, async (req, res) => {
   try {
     // Validate and sanitize query parameters
-    const { status, limit, skip } = req.query;
+    const { status, limit, skip, format } = req.query; // Added 'format'
     
     const query = { owner: req.userData.name };
     
@@ -126,12 +117,18 @@ router.get("/", checkauth, async (req, res) => {
       .skip(skipNum)
       .toArray();
 
-    res.status(200).json({
-      payments,
-      count: payments.length,
-      limit: limitNum,
-      skip: skipNum
-    });
+    // Check if the old client is requesting the simple array format.
+    if (format === 'simple') {
+      res.status(200).json(payments);
+    } else {
+      // Otherwise, return the new, more advanced object structure.
+      res.status(200).json({
+        payments,
+        count: payments.length,
+        limit: limitNum,
+        skip: skipNum
+      });
+    }
 
   } catch (error) {
     console.error("Error fetching payments:", error);
@@ -141,7 +138,6 @@ router.get("/", checkauth, async (req, res) => {
 
 
 // GET SINGLE PAYMENT BY ID
-
 router.get("/:id", checkauth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -171,7 +167,6 @@ router.get("/:id", checkauth, async (req, res) => {
 
 
 // DELETE PAYMENT (ONLY IF PENDING)
-
 router.delete("/:id", checkauth, async (req, res) => {
   try {
     const { id } = req.params;

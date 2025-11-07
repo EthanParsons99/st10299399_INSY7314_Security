@@ -15,8 +15,7 @@ function TransactionHistory() {
       }
 
       try {
-        const response = await fetch('https://localhost:3000/post', {
-          method: 'GET',
+        const response = await fetch('https://localhost:3000/post?format=simple', {          method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
             'X-Requested-With': 'XMLHttpRequest'

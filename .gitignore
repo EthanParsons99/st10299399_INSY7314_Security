@@ -7,6 +7,7 @@
 .env
 backend/.env
 frontend/.env
+employee-portal/.env
 
 # Production build folder (from frontend)
 /frontend/build
