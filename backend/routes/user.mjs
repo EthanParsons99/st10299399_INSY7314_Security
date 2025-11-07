@@ -9,7 +9,7 @@ import { createSession, destroySession } from "../middleware/checkauth.mjs";
 
 const router = express.Router();
 
-// --- NEW HELPER FUNCTION ---
+// --- HELPER FUNCTION ---
 function generateAccountNumber() {
   let accountNumber = '';
   for (let i = 0; i < 10; i++) {
@@ -17,7 +17,7 @@ function generateAccountNumber() {
   }
   return accountNumber;
 }
-// --- END NEW HELPER FUNCTION ---
+// --- HELPER FUNCTION ---
 
 // ============================================
 // REGEX PATTERNS FOR WHITELISTING
@@ -88,6 +88,7 @@ const validateLoginInput = (req, res, next) => {
 // RATE LIMITERS
 // ============================================
 
+// Limit login attempts to prevent brute-force
 const loginLimiter = rateLimit({
   windowMs: 2 * 60 * 1000,
   max: 5,
@@ -96,6 +97,7 @@ const loginLimiter = rateLimit({
   message: 'Too many login attempts. Please try again after 2 minutes.',
   skip: (req, res) => process.env.NODE_ENV === 'development' && req.ip === '::1'
 });
+// Limit signup attempts to prevent abuse
 
 const signupLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -130,7 +132,7 @@ router.post("/signup", signupLimiter, validateSignupInput, async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    
+    // Create new user document
     const newDocument = { 
       name: sanitizedName, 
       password: hashedPassword, 
@@ -140,6 +142,7 @@ router.post("/signup", signupLimiter, validateSignupInput, async (req, res) => {
     
     const result = await collection.insertOne(newDocument);
 
+    // Successful signup response
     res.status(201).json({ 
       message: "Signup successful", 
       userId: result.insertedId,
@@ -186,6 +189,7 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
       return res.status(401).json({ message: "Authentication failed" });
     }
 
+    // Create session and JWT token
     const clientIp = req.ip || req.connection.remoteAddress;
     const sessionId = createSession(clientIp, user.name, null, role);
 
@@ -196,6 +200,7 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
       { expiresIn }
     );
 
+    // Update session with token
     const { activeSessions } = await import("../middleware/checkauth.mjs");
     if (activeSessions.has(sessionId)) {
       const session = activeSessions.get(sessionId);
@@ -203,6 +208,7 @@ router.post("/login", loginLimiter, validateLoginInput, async (req, res) => {
       activeSessions.set(sessionId, session);
     }
 
+    // Successful login response
     res.status(200).json({
       message: "Authentication successful",
       name: user.name,

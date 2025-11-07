@@ -44,7 +44,6 @@ jobs:
           name: Install Backend Dependencies
           command: npm install --prefix backend
             
-      # --- NEW: Improved Server Startup with Guaranteed PID Capture ---
       - run:
           name: Start Backend Server
           command: |
@@ -59,7 +58,6 @@ jobs:
             sleep 5 
           background: true
           
-      # --- NEW: Wait Step with Robust Logging ---
       - run:
           name: Wait for Server to Be Accessible
           command: |
@@ -81,18 +79,15 @@ jobs:
             for i in $(seq 1 $MAX_ATTEMPTS); do
               echo "Attempt $i/$MAX_ATTEMPTS: Waiting for server..."
               
-              # 1. CHECK IF THE SERVER PROCESS IS ALIVE
               # If the process is dead, exit 1 and print the log immediately.
               if ! ps -p $(cat /tmp/server.pid) > /dev/null; then 
                 echo "ERROR: Server process died unexpectedly at attempt $i!";
                 cleanup_and_fail
               fi
               
-              # 2. CHECK IF CURL CAN CONNECT
               # Use || true to prevent curl exit code 7 from terminating the whole script.
               STATUS_CODE=$(curl -sk -o /dev/null -w "%{http_code}" https://127.0.0.1:3000/ || true)
               
-              # Check for a valid HTTP status code (not 0 or "000" which means 'could not connect').
               if [ "$STATUS_CODE" -ne 0 ] && [ "$STATUS_CODE" != "000" ]; then 
                 echo "✓ Server is UP! Responded with status: $STATUS_CODE"
                 exit 0 
@@ -100,11 +95,9 @@ jobs:
               
               sleep 3
             done
-            
-            # 3. IF THE LOOP COMPLETES WITHOUT CONNECTION, CALL THE FAILURE FUNCTION
             cleanup_and_fail
             
-      # --- The remaining tests use the same curl commands ---
+# Rate Limiter and Auth Tests
       - run:
           name: Test Login Rate Limiter
           command: |
@@ -125,7 +118,6 @@ jobs:
       - run:
           name: Clean up background processes
           when: always
-          # Use || true to prevent failure if the process is already dead and kill fails
           command: kill $(cat /tmp/server.pid) || true
 
 # ---------------------------------------------
