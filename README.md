@@ -5,12 +5,29 @@
 - **Joshua Thomas** - ST10263292
 - **Morne Erasmus** - ST10400684
 
-The project implements a secure backend API for a customer international payments portal. The core focus is on the requirements that are needed for task 2.
-These include:
+
+This project implements a secure, two part system for an international payments portal. The core focus of the entire project is on robust, multi-layered **Application Security**.
+
+The system consists of two main portals:
+1.  **The Customer Portal (`/frontend`):** A public-facing application where customers can register, log in, initiate international payments, and view their transaction history.
+2.  **The Employee Portal (`/employee-portal`):** A secure, internal application for bank staff to log in, review pending customer payments, and approve or reject them.
+
+This system also successfully implements for both portals:
 - Password security with hashing and salting
 - Ensuring all inputs are whitelisted using RegEx patterns 
 - Esuring all traffic of the system is served over SSL
 - Ensuring that we protect our system against all attacks
+
+## Lecturer Feedback Implementation
+
+This version of the project addresses all specific feedback provided:
+
+1. **Landing Page**: This now serves as the application's entry point, presenting clear "Log In" and "Sign Up" options to all users.
+
+2. **Account Number**:This feature is now fully implemented. New users are automatically assigned a unique 10-digit account number upon registration, which is now a required field for customer login.
+
+3. **"Personalized welcome message":** The customer dashboard has been enhanced to display a personalized welcome message that includes both the user's name and their account number, providing clear confirmation of their identity.
+
 
 # How to install and run the project
 The project requires you to run dual server setup

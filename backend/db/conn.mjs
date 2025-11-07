@@ -5,7 +5,7 @@ dotenv.config();
 
 const connectionString = process.env.ATLAS_URI || ""; 
 
-// Log connection status (without exposing the full connection string)
+// Log connection status
 if (connectionString) {
   console.log('✓ MongoDB connection string is configured');
 } else {
@@ -19,6 +19,8 @@ const client = new MongoClient(connectionString);
 let conn;
 let db;
 
+// Attempt to connect to MongoDB
+// Log success or failure
 try {
   console.log('Connecting to MongoDB...');
   conn = await client.connect();

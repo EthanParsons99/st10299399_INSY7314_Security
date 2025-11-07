@@ -56,7 +56,6 @@ router.get("/payments", checkAuth, checkEmployeeRole, async (req, res) => {
     
     const collection = db.collection("payments");
     
-    // This pipeline correctly fetches ONLY pending payments AND joins the user's account number.
     const pipeline = [
       { $match: { status: "pending" } },
       {
