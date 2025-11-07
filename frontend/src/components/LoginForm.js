@@ -32,7 +32,7 @@ function LoginForm() {
     return () => {
       setPassword('');
       setMessage('');
-      setAccountNumber(''); // <-- ADDED
+      setAccountNumber(''); 
     };
   }, []);
 
@@ -51,7 +51,7 @@ function LoginForm() {
           'X-Requested-With': 'XMLHttpRequest'
         },
         credentials: 'include', 
-        body: JSON.stringify({ name, password, accountNumber }), // <-- MODIFIED
+        body: JSON.stringify({ name, password, accountNumber }),
       });
 
       const data = await response.json();
@@ -60,11 +60,11 @@ function LoginForm() {
       if (response.ok) {
         sessionStorage.setItem('token', data.token);
         sessionStorage.setItem('userName', data.name);
-        sessionStorage.setItem('accountNumber', data.accountNumber); // <-- ADDED
+        sessionStorage.setItem('accountNumber', data.accountNumber);
         
         setPassword('');
         setName('');
-        setAccountNumber(''); // <-- ADDED
+        setAccountNumber(''); 
         
         navigate('/dashboard');
       } else {

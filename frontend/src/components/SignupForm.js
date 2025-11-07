@@ -23,7 +23,6 @@ function SignupForm() {
       const data = await response.json();
 
       if (response.status === 201) {
-        // --- DISPLAY THE NEW ACCOUNT NUMBER ---
         setMessage(`Success! Your new account number is: ${data.accountNumber}. Please save this to log in.`);
         // Clear form fields
         setName('');
