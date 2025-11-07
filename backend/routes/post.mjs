@@ -1,97 +1,216 @@
-// backend/routes/post.mjs
-
 import express from "express";
 import db from "../db/conn.mjs";
 import { ObjectId } from "mongodb";
-import checkauth from "../middleware/checkauth.mjs"; 
+import checkauth from "../middleware/checkauth.mjs";
+import { 
+  validatePaymentData,
+  sanitizeObject,
+  checkForDangerousPatterns,
+  isValidObjectId
+} from "../middleware/inputValidation.mjs";
 
 const router = express.Router();
 
-// 1. REGEX PATTERNS FOR WHITELISTING 💰
-const amountRegex = /^\d+(\.\d{1,2})?$/; // Positive number with up to 2 decimal places (e.g., 100, 100.00)
-const currencyRegex = /^[A-Z]{3}$/; // Exactly 3 uppercase letters (e.g., USD, EUR)
-const providerRegex = /^[a-zA-Z0-9\s-]{3,50}$/; // Alphanumeric, spaces, and hyphens, 3-50 chars
-const accountRegex = /^\d{6,34}$/; // 6 to 34 digits (Covers most bank accounts)
-const swiftRegex = /^[A-Z0-9]{8,11}$/; // 8 or 11 uppercase alphanumeric chars (SWIFT/BIC format)
 
-// 2. INPUT VALIDATION MIDDLEWARE
+// ENHANCED PAYMENT VALIDATION MIDDLEWARE
+
 const validatePaymentInput = (req, res, next) => {
-  const paymentData = req.body;
-
-  // Basic presence check
-  if (
-    !paymentData.amount ||
-    !paymentData.currency ||
-    !paymentData.provider ||
-    !paymentData.recipientAccount ||
-    !paymentData.swiftCode
-  ) {
-    return res.status(400).json({ message: "All payment fields are required." });
-  }
-
-  // Whitelisting checks
-  if (!amountRegex.test(paymentData.amount.toString())) {
-    return res.status(400).json({ message: "Invalid amount format. Must be a positive number with up to two decimal places." });
-  }
-
-  if (!currencyRegex.test(paymentData.currency)) {
-    return res.status(400).json({ message: "Invalid currency format. Must be a 3-letter uppercase code (e.g., USD)." });
-  }
-
-  if (!providerRegex.test(paymentData.provider)) {
-    return res.status(400).json({ message: "Invalid provider format. Use 3-50 alphanumeric characters, spaces, or hyphens." });
-  }
+  // First, check for dangerous patterns in the entire request body
+  const bodyString = JSON.stringify(req.body);
+  const dangerCheck = checkForDangerousPatterns(bodyString);
   
-  if (!accountRegex.test(paymentData.recipientAccount)) {
-    return res.status(400).json({ message: "Invalid recipient account format. Must be 6-34 digits." });
+  if (!dangerCheck.safe) {
+    console.warn(`Security threat detected: ${dangerCheck.threat}`);
+    return res.status(400).json({ 
+      message: "Invalid input detected. Request rejected for security reasons." 
+    });
   }
 
-  if (!swiftRegex.test(paymentData.swiftCode)) {
-    return res.status(400).json({ message: "Invalid swift code format. Must be 8 or 11 uppercase alphanumeric characters." });
+  // Use the comprehensive validation function
+  const validation = validatePaymentData(req.body);
+  
+  if (!validation.valid) {
+    return res.status(400).json({ 
+      message: "Payment validation failed", 
+      errors: validation.errors 
+    });
   }
 
+  // Sanitize the body as an additional layer of protection
+  req.body = sanitizeObject(req.body);
+  
   next();
 };
 
-// CREATE a new payment. This route is PROTECTED and VALIDATED.
+
+// CREATE PAYMENT (PROTECTED & VALIDATED)
+
 router.post("/", checkauth, validatePaymentInput, async (req, res) => {
   try {
-    // Data is now whitelisted and safe to use
     const paymentData = req.body;
-    const collection = db.collection("payments"); 
+    const collection = db.collection("payments");
+
+    // Additional server-side validation
+    const amount = parseFloat(paymentData.amount);
+    
+    if (isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ message: "Invalid amount: must be a positive number" });
+    }
+
+    if (amount > 1000000) {
+      return res.status(400).json({ message: "Amount exceeds maximum limit" });
+    }
 
     const newPayment = {
-      amount: parseFloat(paymentData.amount), // Ensure amount is stored as a number
-      currency: paymentData.currency,
+      amount: amount,
+      currency: paymentData.currency.toUpperCase(),
       provider: paymentData.provider,
       recipientAccount: paymentData.recipientAccount,
-      swiftCode: paymentData.swiftCode,
-      status: "pending", 
-      owner: req.userData.name, 
+      swiftCode: paymentData.swiftCode.toUpperCase(),
+      status: "pending",
+      owner: req.userData.name, // From authenticated session
       createdAt: new Date(),
+      ipAddress: req.ip || req.connection.remoteAddress, // Log IP for audit trail
     };
 
     const result = await collection.insertOne(newPayment);
-    res.status(201).json({ message: "Payment created successfully", paymentId: result.insertedId });
+    
+    console.log(`Payment created: ${result.insertedId} by user: ${req.userData.name}`);
+    
+    res.status(201).json({ 
+      message: "Payment created successfully", 
+      paymentId: result.insertedId 
+    });
 
   } catch (error) {
     console.error("Payment creation error:", error);
-    res.status(500).json({ message: "Failed to create payment." });
+    res.status(500).json({ message: "Failed to create payment" });
   }
 });
 
-// GET all payments for the logged-in user. Also protected.
+
+// GET ALL PAYMENTS FOR LOGGED-IN USER
+
 router.get("/", checkauth, async (req, res) => {
-    try {
-        const collection = db.collection("payments");
-        // Find only payments that belong to the logged-in user
-        const payments = await collection.find({ owner: req.userData.name }).toArray();
-        res.status(200).json(payments);
-    } catch (error) {
-        console.error("Error fetching payments:", error);
-        res.status(500).json({ message: "Failed to retrieve payments." });
+  try {
+    // Validate and sanitize query parameters
+    const { status, limit, skip } = req.query;
+    
+    const query = { owner: req.userData.name };
+    
+    // Add optional status filter with validation
+    if (status) {
+      const validStatuses = ['pending', 'approved', 'rejected'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ message: "Invalid status filter" });
+      }
+      query.status = status;
     }
+
+    const collection = db.collection("payments");
+    
+    // Pagination with validation
+    const limitNum = Math.min(parseInt(limit) || 50, 100); // Max 100 results
+    const skipNum = Math.max(parseInt(skip) || 0, 0);
+
+    const payments = await collection
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(limitNum)
+      .skip(skipNum)
+      .toArray();
+
+    res.status(200).json({
+      payments,
+      count: payments.length,
+      limit: limitNum,
+      skip: skipNum
+    });
+
+  } catch (error) {
+    console.error("Error fetching payments:", error);
+    res.status(500).json({ message: "Failed to retrieve payments" });
+  }
 });
 
+
+// GET SINGLE PAYMENT BY ID
+
+router.get("/:id", checkauth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId format
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid payment ID format" });
+    }
+
+    const collection = db.collection("payments");
+    const payment = await collection.findOne({ 
+      _id: new ObjectId(id),
+      owner: req.userData.name // Ensure user can only access their own payments
+    });
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    res.status(200).json(payment);
+
+  } catch (error) {
+    console.error("Error fetching payment:", error);
+    res.status(500).json({ message: "Failed to retrieve payment" });
+  }
+});
+
+
+// DELETE PAYMENT (ONLY IF PENDING)
+
+router.delete("/:id", checkauth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId format
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid payment ID format" });
+    }
+
+    const collection = db.collection("payments");
+    
+    // First, check if payment exists and belongs to user
+    const payment = await collection.findOne({ 
+      _id: new ObjectId(id),
+      owner: req.userData.name 
+    });
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    // Only allow deletion of pending payments
+    if (payment.status !== 'pending') {
+      return res.status(403).json({ 
+        message: "Cannot delete a payment that has already been processed" 
+      });
+    }
+
+    const result = await collection.deleteOne({ 
+      _id: new ObjectId(id),
+      owner: req.userData.name 
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    console.log(`Payment deleted: ${id} by user: ${req.userData.name}`);
+    
+    res.status(200).json({ message: "Payment deleted successfully" });
+
+  } catch (error) {
+    console.error("Error deleting payment:", error);
+    res.status(500).json({ message: "Failed to delete payment" });
+  }
+});
 
 export default router;
