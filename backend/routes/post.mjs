@@ -177,7 +177,8 @@ router.delete("/:id", checkauth, async (req, res) => {
     const { id } = req.params;
 
     // Validate ObjectId format
-    if (!isValidObjectId(id)) {
+    const sanitizedId = sanitizeObject(id); 
+    if (!isValidObjectId(sanitizedId)) {
       return res.status(400).json({ message: "Invalid payment ID format" });
     }
 
@@ -185,7 +186,7 @@ router.delete("/:id", checkauth, async (req, res) => {
     
     // First, check if payment exists and belongs to user
     const payment = await collection.findOne({ 
-      _id: new ObjectId(id),
+      _id: new ObjectId(sanitizedId),
       owner: req.userData.name 
     });
 
@@ -201,7 +202,7 @@ router.delete("/:id", checkauth, async (req, res) => {
     }
 
     const result = await collection.deleteOne({ 
-      _id: new ObjectId(id),
+      _id: new ObjectId(sanitizedId),
       owner: req.userData.name 
     });
 
